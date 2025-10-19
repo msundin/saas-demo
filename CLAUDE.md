@@ -2,9 +2,29 @@
 
 ## Project Overview
 
-**Type:** Turborepo monorepo for multiple SaaS applications  
-**Purpose:** Rapid SaaS development with maximum code reuse  
+**Type:** Turborepo monorepo for multiple SaaS applications
+**Purpose:** Rapid SaaS development with maximum code reuse
 **Philosophy:** Feature-based architecture, iterative development, test-driven
+
+## 🚀 Current Configuration
+
+**Workflow Mode:** **RAPID MODE**
+**Active Since:** October 19, 2025
+
+**What this means:**
+- ✅ Work directly on `main` branch
+- ✅ Skip GitHub issues (create only if needed for tracking)
+- ✅ Commit frequently with descriptive messages
+- ✅ No PR process required
+- ✅ Auto-deploy on every push to main
+- ✅ **Focus:** Speed and iteration over process
+
+**Switch to Production Mode when:**
+- First paying customer acquired
+- Team member added
+- Stability becomes critical
+
+---
 
 ## Tech Stack (October 2025 Verified)
 
