@@ -23,10 +23,32 @@
 - 🔄 Supabase client for app CRUD (RLS) + Drizzle for server-only complex queries
 
 ### Core Framework
-- **Next.js 15** (App Router, Server Components, Server Actions)
+- **Next.js 15** (App Router, Server Components, Server Actions, PPR)
+  - Partial Prerendering (PPR) for optimal performance
+  - `use cache` directive for simplified caching
+  - Enhanced Forms with `next/form` component
+  - Server Actions for mutations
 - **TypeScript 5+** (strict mode, no `any` types)
 - **React 19** (with Server Components)
 - **Tailwind CSS** (utility-first styling)
+
+**Next.js 15 Key Features:**
+```typescript
+// ✅ Partial Prerendering (PPR) - Enable in next.config.js
+export const experimental_ppr = true
+
+// ✅ use cache directive (replaces some React Query needs)
+'use cache'
+export async function getInvoices() {
+  // Cached at function level
+}
+
+// ✅ Enhanced Forms (next/form component)
+import { Form } from 'next/form'
+<Form action="/search">
+  <input name="query" />
+</Form>
+```
 
 **Future considerations:**
 - React Compiler (when stable in Next.js ecosystem)
@@ -53,6 +75,84 @@
 - **Primary:** Supabase Auth (email/password + OAuth)
 - **Alternative:** Clerk (if advanced features needed)
 
+### UI Components
+- **Shadcn UI** (copy-paste components, full ownership)
+- **Radix UI** (accessible primitives underneath)
+- **CVA** (class-variance-authority for component variants)
+- **Tailwind Merge** (for className conflicts)
+- **Lucide Icons** (icon library)
+
+**Component Philosophy:**
+- Copy-paste, don't install as dependency
+- Full control over component code
+- Accessible by default via Radix UI
+- Customize freely for each app
+
+### State Management
+- **Server State:** React Server Components (primary)
+- **Client State (simple):** useState, useReducer
+- **Client State (complex):** Zustand (recommended over Redux)
+- **Form State:** React Hook Form + Zod
+- **URL State:** nuqs library (type-safe search params)
+
+**State Management Strategy:**
+```typescript
+// ✅ GOOD - Server state via RSC
+export default async function Page() {
+  const data = await fetchData() // Server state
+  return <Component data={data} />
+}
+
+// ✅ GOOD - Client state with Zustand (for complex state)
+import { create } from 'zustand'
+
+const useStore = create((set) => ({
+  cart: [],
+  addItem: (item) => set((state) => ({ cart: [...state.cart, item] }))
+}))
+
+// ✅ GOOD - URL state with nuqs
+import { useQueryState } from 'nuqs'
+
+const [search, setSearch] = useQueryState('search')
+```
+
+### Background Jobs & Async Tasks
+- **Inngest** (recommended) - Type-safe background jobs
+- **Trigger.dev** (alternative) - Developer-first job framework
+- **Supabase Edge Functions** (lighter tasks, webhooks)
+- **Vercel Cron Jobs** (scheduled tasks)
+
+**Use cases:**
+- Email sending (avoid blocking requests)
+- Data processing and exports
+- Webhook processing
+- Scheduled reports
+- Database cleanup tasks
+
+**Example (Inngest):**
+```typescript
+// lib/inngest/client.ts
+import { Inngest } from 'inngest'
+
+export const inngest = new Inngest({ id: 'my-app' })
+
+// lib/inngest/functions/send-invoice.ts
+export const sendInvoice = inngest.createFunction(
+  { id: 'send-invoice' },
+  { event: 'invoice.created' },
+  async ({ event, step }) => {
+    const invoice = await step.run('fetch-invoice', async () => {
+      return fetchInvoice(event.data.invoiceId)
+    })
+
+    await step.run('send-email', async () => {
+      return sendEmail(invoice)
+    })
+  }
+)
+```
+
 ### Monorepo
 - **Turborepo** (build system)
 - **pnpm** (package manager)
@@ -60,9 +160,40 @@
 
 ### Deployment & Infrastructure
 - **Hosting:** Vercel (automatic deployments)
-- **Error Tracking:** Sentry
-- **Analytics:** PostHog or Vercel Analytics
 - **Payments:** Stripe (when needed)
+
+### Observability & Monitoring
+- **Error Tracking:** Sentry (exceptions, performance)
+- **Logging:** Axiom or Logflare (structured logs)
+- **Analytics:** PostHog (product analytics + feature flags)
+- **Real User Monitoring:** Vercel Web Analytics
+- **Database Monitoring:** Supabase Dashboard + custom metrics
+- **Tracing:** OpenTelemetry (optional, for distributed tracing)
+- **Uptime Monitoring:** Better Uptime or Checkly
+
+**Observability Strategy:**
+```typescript
+// ✅ Structured logging
+import { logger } from '@/lib/logger'
+
+logger.info('Invoice created', {
+  invoiceId: invoice.id,
+  userId: user.id,
+  amount: invoice.amount
+})
+
+// ✅ Error tracking with context
+Sentry.captureException(error, {
+  tags: { feature: 'invoices' },
+  extra: { invoiceId }
+})
+
+// ✅ Custom metrics
+analytics.track('Invoice Created', {
+  amount: invoice.amount,
+  currency: 'USD'
+})
+```
 
 ### Testing & Quality
 - **Unit Tests:** Vitest
@@ -71,6 +202,61 @@
 - **Linting:** ESLint + TypeScript ESLint
 - **Formatting:** Prettier
 - **Pre-commit:** Husky + lint-staged
+
+---
+
+## Getting Started
+
+### Local Development Setup
+
+**Prerequisites:**
+- Node.js 20+ and pnpm installed
+- Supabase account (free tier works)
+- Git for version control
+
+**Initial Setup:**
+```bash
+# 1. Clone repository (or create new monorepo)
+git clone <your-repo-url>
+cd saas-monorepo
+
+# 2. Install dependencies
+pnpm install
+
+# 3. Copy environment variables
+cp apps/template/.env.example apps/template/.env.local
+
+# 4. Setup Supabase locally (optional but recommended)
+pnpm supabase init
+pnpm supabase start
+
+# 5. Configure environment variables
+# Edit apps/template/.env.local with your Supabase credentials
+
+# 6. Generate database types
+pnpm supabase gen types typescript --local > apps/template/types/database.ts
+
+# 7. Run database migrations
+cd apps/template
+pnpm drizzle-kit migrate
+
+# 8. Start development server
+cd ../..
+pnpm dev --filter=template
+```
+
+**Accessing the app:**
+- App: http://localhost:3000
+- Supabase Studio: http://localhost:54323
+
+**Common Setup Issues:**
+
+| Issue | Solution |
+|-------|----------|
+| Port 3000 already in use | Change port in package.json: `"dev": "next dev -p 3001"` |
+| Supabase connection error | Check DATABASE_URL and SUPABASE_URL in .env.local |
+| TypeScript errors on start | Run `pnpm type-check` to see full errors |
+| Module not found | Clear cache: `rm -rf .next node_modules && pnpm install` |
 
 ---
 
@@ -975,6 +1161,135 @@ CREATE POLICY "Users create own invoices"
   WITH CHECK (auth.uid() = user_id);
 ```
 
+### Multi-Tenancy Pattern (Organizations/Workspaces)
+
+Most B2B SaaS requires team-based access, not just individual users.
+
+**Database Schema:**
+```sql
+-- Organizations table
+CREATE TABLE organizations (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  slug TEXT UNIQUE NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Organization members (junction table)
+CREATE TABLE organization_members (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  organization_id UUID REFERENCES organizations(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  role TEXT NOT NULL CHECK (role IN ('owner', 'admin', 'member')),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(organization_id, user_id)
+);
+
+-- Invoices now belong to organizations
+CREATE TABLE invoices (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  organization_id UUID REFERENCES organizations(id) ON DELETE CASCADE,
+  created_by UUID REFERENCES auth.users(id),
+  amount DECIMAL NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Enable RLS
+ALTER TABLE organizations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE organization_members ENABLE ROW LEVEL SECURITY;
+ALTER TABLE invoices ENABLE ROW LEVEL SECURITY;
+
+-- RLS Policies for team-based access
+CREATE POLICY "Users view organizations they belong to"
+  ON organizations FOR SELECT
+  USING (
+    id IN (
+      SELECT organization_id FROM organization_members
+      WHERE user_id = auth.uid()
+    )
+  );
+
+CREATE POLICY "Team members view team invoices"
+  ON invoices FOR SELECT
+  USING (
+    organization_id IN (
+      SELECT organization_id FROM organization_members
+      WHERE user_id = auth.uid()
+    )
+  );
+
+CREATE POLICY "Admins and owners can create invoices"
+  ON invoices FOR INSERT
+  WITH CHECK (
+    organization_id IN (
+      SELECT organization_id FROM organization_members
+      WHERE user_id = auth.uid()
+      AND role IN ('owner', 'admin')
+    )
+  );
+```
+
+**TypeScript Types:**
+```typescript
+// types/organization.types.ts
+export type OrganizationRole = 'owner' | 'admin' | 'member'
+
+export interface Organization {
+  id: string
+  name: string
+  slug: string
+  created_at: string
+}
+
+export interface OrganizationMember {
+  id: string
+  organization_id: string
+  user_id: string
+  role: OrganizationRole
+  created_at: string
+}
+```
+
+**Helper Functions:**
+```typescript
+// lib/auth/organization.ts
+export async function getCurrentOrganization(
+  organizationId: string
+): Promise<Organization | null> {
+  const supabase = await createClient()
+
+  const { data } = await supabase
+    .from('organizations')
+    .select('*')
+    .eq('id', organizationId)
+    .single()
+
+  return data
+}
+
+export async function hasOrganizationAccess(
+  userId: string,
+  organizationId: string,
+  requiredRole?: OrganizationRole
+): Promise<boolean> {
+  const supabase = await createClient()
+
+  let query = supabase
+    .from('organization_members')
+    .select('role')
+    .eq('organization_id', organizationId)
+    .eq('user_id', userId)
+
+  if (requiredRole) {
+    const roleHierarchy = { owner: 3, admin: 2, member: 1 }
+    query = query.gte('role', roleHierarchy[requiredRole])
+  }
+
+  const { data } = await query.single()
+  return !!data
+}
+```
+
 ### Supabase vs Drizzle - When to Use What
 
 **Supabase Client (respects RLS automatically):**
@@ -1022,6 +1337,274 @@ STRIPE_SECRET_KEY=xxx
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!)
 ```
 
+### Rate Limiting
+Protect your API routes and Server Actions:
+
+```typescript
+// lib/rate-limit.ts
+import { Ratelimit } from '@upstash/ratelimit'
+import { Redis } from '@upstash/redis'
+
+export const ratelimit = new Ratelimit({
+  redis: Redis.fromEnv(),
+  limiter: Ratelimit.slidingWindow(10, '10 s'),
+  analytics: true,
+})
+
+// app/api/webhooks/stripe/route.ts
+export async function POST(req: Request) {
+  const ip = req.headers.get('x-forwarded-for') ?? 'anonymous'
+  const { success } = await ratelimit.limit(ip)
+
+  if (!success) {
+    return Response.json(
+      { error: 'Too many requests' },
+      { status: 429 }
+    )
+  }
+
+  // Process webhook...
+}
+```
+
+---
+
+## Common SaaS Patterns
+
+### Webhooks (Receiving)
+```typescript
+// app/api/webhooks/stripe/route.ts
+import { stripe } from '@/lib/stripe'
+import { headers } from 'next/headers'
+
+export async function POST(req: Request) {
+  const body = await req.text()
+  const signature = headers().get('stripe-signature')!
+
+  let event
+
+  try {
+    event = stripe.webhooks.constructEvent(
+      body,
+      signature,
+      process.env.STRIPE_WEBHOOK_SECRET!
+    )
+  } catch (err) {
+    return Response.json(
+      { error: 'Webhook signature verification failed' },
+      { status: 400 }
+    )
+  }
+
+  // Handle the event
+  switch (event.type) {
+    case 'customer.subscription.created':
+      const subscription = event.data.object
+      // Update database
+      await updateSubscription(subscription)
+      break
+
+    case 'invoice.payment_succeeded':
+      // Send invoice email
+      await sendInvoiceEmail(event.data.object)
+      break
+  }
+
+  return Response.json({ received: true })
+}
+```
+
+### File Uploads (Supabase Storage)
+```typescript
+// actions/upload-actions.ts
+'use server'
+
+import { createClient } from '@/lib/supabase/server'
+import { revalidatePath } from 'next/cache'
+
+export async function uploadFile(formData: FormData) {
+  const supabase = await createClient()
+  const file = formData.get('file') as File
+
+  if (!file) {
+    return { success: false, error: 'No file provided' }
+  }
+
+  // Validate file type and size
+  const allowedTypes = ['image/jpeg', 'image/png', 'application/pdf']
+  if (!allowedTypes.includes(file.type)) {
+    return { success: false, error: 'Invalid file type' }
+  }
+
+  const maxSize = 5 * 1024 * 1024 // 5MB
+  if (file.size > maxSize) {
+    return { success: false, error: 'File too large' }
+  }
+
+  // Upload to Supabase Storage
+  const fileName = `${Date.now()}-${file.name}`
+  const { data, error } = await supabase.storage
+    .from('uploads')
+    .upload(fileName, file, {
+      cacheControl: '3600',
+      upsert: false
+    })
+
+  if (error) {
+    return { success: false, error: error.message }
+  }
+
+  // Get public URL
+  const { data: { publicUrl } } = supabase.storage
+    .from('uploads')
+    .getPublicUrl(fileName)
+
+  return { success: true, url: publicUrl }
+}
+```
+
+### Email (Resend + React Email)
+```typescript
+// lib/email/client.ts
+import { Resend } from 'resend'
+
+export const resend = new Resend(process.env.RESEND_API_KEY)
+
+// emails/invoice-created.tsx
+import { Html, Button, Container, Heading, Text } from '@react-email/components'
+
+export function InvoiceCreatedEmail({ invoiceNumber, amount, dueDate }) {
+  return (
+    <Html>
+      <Container>
+        <Heading>New Invoice Created</Heading>
+        <Text>Invoice #{invoiceNumber} for ${amount}</Text>
+        <Text>Due: {dueDate}</Text>
+        <Button href={`https://app.example.com/invoices/${invoiceNumber}`}>
+          View Invoice
+        </Button>
+      </Container>
+    </Html>
+  )
+}
+
+// actions/invoice-actions.ts
+import { resend } from '@/lib/email/client'
+import { InvoiceCreatedEmail } from '@/emails/invoice-created'
+
+async function sendInvoiceEmail(invoice: Invoice) {
+  await resend.emails.send({
+    from: 'noreply@example.com',
+    to: invoice.customer_email,
+    subject: `Invoice #${invoice.number}`,
+    react: InvoiceCreatedEmail({
+      invoiceNumber: invoice.number,
+      amount: invoice.amount,
+      dueDate: invoice.due_date
+    })
+  })
+}
+```
+
+### Feature Flags
+```typescript
+// lib/feature-flags.ts
+import { posthog } from '@/lib/posthog'
+
+export async function isFeatureEnabled(
+  featureKey: string,
+  userId: string
+): Promise<boolean> {
+  return posthog.isFeatureEnabled(featureKey, userId)
+}
+
+// components/new-dashboard.tsx
+'use client'
+
+export function Dashboard({ userId }: { userId: string }) {
+  const [showNewDashboard, setShowNewDashboard] = useState(false)
+
+  useEffect(() => {
+    isFeatureEnabled('new-dashboard', userId).then(setShowNewDashboard)
+  }, [userId])
+
+  if (showNewDashboard) {
+    return <NewDashboard />
+  }
+
+  return <OldDashboard />
+}
+```
+
+---
+
+## Accessibility
+
+### Accessibility Requirements
+
+All features must meet WCAG 2.1 AA standards:
+
+**1. Keyboard Navigation**
+- All interactive elements accessible via keyboard
+- Logical tab order
+- Visible focus indicators
+- Escape key closes modals/dropdowns
+
+**2. Screen Reader Support**
+- Semantic HTML (`<nav>`, `<main>`, `<article>`)
+- ARIA labels where needed
+- Alt text for images
+- Form labels properly associated
+
+**3. Color & Contrast**
+- Minimum 4.5:1 contrast for normal text
+- Minimum 3:1 for large text
+- Don't rely on color alone
+- Support for dark mode
+
+**4. Forms**
+- Clear labels for all inputs
+- Error messages announced to screen readers
+- Validation feedback visible and audible
+
+**Example:**
+```typescript
+// ✅ GOOD - Accessible button
+<button
+  type="button"
+  aria-label="Close modal"
+  onClick={handleClose}
+  className="focus:ring-2 focus:ring-blue-500"
+>
+  <XIcon className="h-5 w-5" aria-hidden="true" />
+</button>
+
+// ✅ GOOD - Accessible form
+<form>
+  <label htmlFor="email" className="block text-sm font-medium">
+    Email Address
+  </label>
+  <input
+    id="email"
+    name="email"
+    type="email"
+    aria-required="true"
+    aria-invalid={!!error}
+    aria-describedby={error ? "email-error" : undefined}
+  />
+  {error && (
+    <p id="email-error" role="alert" className="text-red-600">
+      {error}
+    </p>
+  )}
+</form>
+```
+
+**Tools:**
+- **Testing:** axe DevTools, Lighthouse
+- **Screen readers:** NVDA (Windows), VoiceOver (Mac)
+- **Components:** Radix UI handles most accessibility automatically
+
 ---
 
 ## Performance Optimization
@@ -1056,7 +1639,135 @@ export const revalidate = 3600
 
 // Dynamic (always fresh)
 export const dynamic = 'force-dynamic'
+
+// Next.js 15: use cache directive
+'use cache'
+export async function getInvoices() {
+  // Function-level caching
+}
 ```
+
+### Image Optimization
+```typescript
+// ✅ GOOD - Use Next.js Image component
+import Image from 'next/image'
+
+<Image
+  src="/hero.jpg"
+  alt="Hero image"
+  width={1200}
+  height={600}
+  priority // for LCP images
+  placeholder="blur"
+/>
+```
+
+---
+
+## CI/CD Pipeline
+
+### GitHub Actions Workflow
+
+```yaml
+# .github/workflows/ci.yml
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - run: pnpm install
+      - run: pnpm lint
+
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - run: pnpm install
+      - run: pnpm type-check
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - run: pnpm install
+      - run: pnpm test:coverage
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - run: pnpm install
+      - run: pnpm build
+
+      # Enable Turborepo Remote Caching
+      - name: Setup Turborepo cache
+        uses: actions/cache@v3
+        with:
+          path: .turbo
+          key: ${{ runner.os }}-turbo-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-turbo-
+
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - run: pnpm install
+      - run: pnpm playwright install --with-deps
+      - run: pnpm test:e2e
+
+      - uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: playwright-report
+          path: playwright-report/
+```
+
+### Vercel Deployment
+- Automatic preview deployments for PRs
+- Production deployments on merge to main
+- Turborepo remote caching enabled
+- Environment variables configured in Vercel dashboard
 
 ---
 
@@ -1117,29 +1828,74 @@ const { register, handleSubmit } = useForm()
 
 ## Success Metrics
 
+### Code Quality
 - ✅ All tests passing
 - ✅ 80%+ test coverage
 - ✅ Zero ESLint errors
 - ✅ Zero TypeScript errors
-- ✅ Fast build times (<2 min with cache)
-- ✅ Lighthouse score >90
-- ✅ Core Web Vitals: Good
 - ✅ No RLS bypasses without explicit auth checks
+
+### Performance
+- ✅ Fast build times (<2 min with Turborepo cache)
+- ✅ Lighthouse score >90
+- ✅ Core Web Vitals: Good (LCP <2.5s, FID <100ms, CLS <0.1)
+- ✅ Time to First Byte (TTFB) <600ms
+
+### Accessibility
+- ✅ WCAG 2.1 AA compliance
+- ✅ Keyboard navigation working
+- ✅ Screen reader tested
+- ✅ 4.5:1 color contrast minimum
+
+### Security
+- ✅ All RLS policies tested
+- ✅ No secrets in client-side code
+- ✅ Rate limiting on public endpoints
+- ✅ CSRF protection on forms
+- ✅ Input validation on all Server Actions
 
 ---
 
 ## Resources
 
+### Core Technologies
 - [Next.js Docs](https://nextjs.org/docs)
+- [React Docs](https://react.dev)
+- [TypeScript Handbook](https://www.typescriptlang.org/docs)
+- [Tailwind CSS](https://tailwindcss.com/docs)
+
+### Backend & Database
 - [Supabase Docs](https://supabase.com/docs)
 - [Drizzle ORM Docs](https://orm.drizzle.team)
+- [PostgreSQL Docs](https://www.postgresql.org/docs)
+
+### Tooling
 - [Turborepo Docs](https://turborepo.com/docs)
-- [Shadcn UI](https://ui.shadcn.com)
+- [pnpm Docs](https://pnpm.io)
 - [Vitest Docs](https://vitest.dev)
 - [Playwright Docs](https://playwright.dev)
 
+### UI & Accessibility
+- [Shadcn UI](https://ui.shadcn.com)
+- [Radix UI](https://www.radix-ui.com)
+- [Lucide Icons](https://lucide.dev)
+- [WCAG 2.1 Guidelines](https://www.w3.org/WAI/WCAG21/quickref)
+
+### Services
+- [Stripe Docs](https://stripe.com/docs)
+- [Resend Docs](https://resend.com/docs)
+- [React Email](https://react.email)
+- [Inngest Docs](https://www.inngest.com/docs)
+- [PostHog Docs](https://posthog.com/docs)
+- [Sentry Docs](https://docs.sentry.io)
+
+### Learning Resources
+- [next-forge (reference template)](https://github.com/vercel/next-forge)
+- [Next.js Learn](https://nextjs.org/learn)
+- [Patterns.dev](https://www.patterns.dev)
+
 ---
 
-**Last Updated:** October 2025  
-**Version:** 1.1.0 (Production-Ready with Security Fixes)  
+**Last Updated:** October 2025
+**Version:** 2.0.0 (2025 Best Practices)
 **Status:** Production Ready
