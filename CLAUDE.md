@@ -12,17 +12,26 @@
 **Active Since:** October 19, 2025
 
 **What this means:**
+- ⚡ Streamlined **PROCESS** (no PRs, no issues, work on main)
+- ⚡ Fast iteration (commit and deploy frequently)
+- ✅ **SAME quality standards** (80%+ tests, TDD, security)
 - ✅ Work directly on `main` branch
-- ✅ Skip GitHub issues (create only if needed for tracking)
-- ✅ Commit frequently with descriptive messages
-- ✅ No PR process required
-- ✅ Auto-deploy on every push to main
-- ✅ **Focus:** Speed and iteration over process
+- ✅ Skip GitHub issues (create only if needed)
+- ✅ Auto-deploy on every push
+
+**Quality Non-Negotiables (Always Apply):**
+- ✅ TDD for critical paths (auth, payments, mutations)
+- ✅ 80%+ test coverage
+- ✅ All security checks (RLS, validation)
+- ✅ TypeScript strict mode
+- ✅ Accessibility standards
+
+**Philosophy:** Skip bureaucracy, NOT quality. Move fast with confidence.
 
 **Switch to Production Mode when:**
 - First paying customer acquired
 - Team member added
-- Stability becomes critical
+- Need code review process
 
 ---
 
@@ -617,13 +626,32 @@ describe('InvoiceForm', () => {
 - Solo development without users yet
 - Learning new technology
 
+**What "Rapid" means:**
+- ⚡ **Streamlined PROCESS** (no PRs, no issues, work on main)
+- ⚡ **Fast iteration** (commit and deploy frequently)
+- ⚠️ **NOT** lower code quality or fewer tests!
+
 **Process:**
 1. Work directly on `main` branch
 2. Skip GitHub issues (unless you want them for your own tracking)
-3. Commit frequently with clear, descriptive messages
-4. Include `#issue-number` in commits IF you created an issue
-5. Auto-deploy via Vercel on every push
-6. Focus on speed and learning
+3. **Write tests first** (TDD for all critical paths)
+4. Commit frequently with clear, descriptive messages
+5. Include `#issue-number` in commits IF you created an issue
+6. Auto-deploy via Vercel on every push
+7. Focus on speed AND quality
+
+**Quality Standards (SAME as Production Mode):**
+- ✅ 80%+ test coverage
+- ✅ TDD for critical features (auth, payments, mutations)
+- ✅ All security checks (RLS, validation, auth)
+- ✅ TypeScript strict mode
+- ✅ Zero ESLint errors
+- ✅ Accessibility requirements met
+
+**The difference is PROCESS, not QUALITY:**
+- Rapid Mode = Skip bureaucracy, move fast
+- Production Mode = Add process for team coordination
+- Both modes = Same code quality standards
 
 **Commit format:**
 ```bash
@@ -1837,12 +1865,36 @@ const { register, handleSubmit } = useForm()
 1. **Always reference this file** for architecture decisions
 2. **Learn from next-forge**: When implementing patterns, check how next-forge solves similar problems (monorepo structure, shared packages, testing) - but adapt to our Supabase + Drizzle stack
 3. **Ask before deviating** from patterns
-4. **Write tests** alongside implementation
+4. **Write tests FIRST** - TDD for all critical paths, 80%+ coverage in ALL modes
 5. **Keep features isolated** - no cross-feature dependencies
 6. **Show me the plan** before implementing large changes
 7. **Run validation** before committing
-8. **Suggest improvements** to this document when you spot issues
+8. **Proactively suggest improvements** - Challenge patterns, suggest better approaches, propose tech stack improvements
 9. **Security first**: Always check auth before using Drizzle, use Supabase client when RLS is sufficient
+
+### 🎯 Your Mission: Maximum Efficiency & Correctness
+
+**You should actively suggest improvements to:**
+- **Process:** Better workflows, faster feedback loops, reduced friction
+- **Architecture:** Simpler patterns, better separation of concerns, more maintainable code
+- **Tech Stack:** Better libraries, new tools, performance improvements
+- **Testing:** Better test strategies, faster test execution, higher confidence
+- **DX:** Better developer experience, clearer documentation, easier onboarding
+
+**When you spot:**
+- 🔴 Patterns that cause bugs → Suggest safer alternatives
+- 🐌 Slow workflows → Propose faster approaches
+- 🤔 Confusing architecture → Recommend simplifications
+- 📚 Better libraries/tools → Explain benefits and propose adoption
+- ⚠️ Technical debt → Flag it and suggest when/how to address it
+
+**Philosophy:**
+- **Speak up early** - Don't wait until it's a problem
+- **Be specific** - "Use X instead of Y because..." with examples
+- **Balance trade-offs** - Explain pros/cons, let user decide
+- **Challenge assumptions** - Including patterns in this document
+
+This is a living codebase. Your insights make it better. 🚀
 
 ---
 
