@@ -1,9 +1,9 @@
-# Production SaaS Monorepo
+# SaaS Template
 
 ## Project Overview
 
-**Type:** Turborepo monorepo for multiple SaaS applications
-**Purpose:** Rapid SaaS development with maximum code reuse
+**Type:** Next.js SaaS application template
+**Purpose:** Production-ready template for rapid SaaS development
 **Philosophy:** Feature-based architecture, iterative development, test-driven
 
 ## 🚀 Current Configuration
@@ -58,11 +58,11 @@ This documentation is split into focused files for efficiency:
 ```bash
 # 1. Clone and install
 git clone <your-repo-url>
-cd saas-monorepo
+cd saas-template
 pnpm install
 
 # 2. Setup environment
-cp apps/template/.env.example apps/template/.env.local
+cp .env.example .env.local
 # Edit .env.local with your Supabase credentials
 
 # 3. Setup Supabase (optional but recommended)
@@ -70,11 +70,11 @@ pnpm supabase init
 pnpm supabase start
 
 # 4. Generate types and run migrations
-pnpm supabase gen types typescript --local > apps/template/types/database.ts
-cd apps/template && pnpm drizzle-kit migrate && cd ../..
+pnpm supabase gen types typescript --local > types/database.ts
+pnpm db:migrate
 
 # 5. Start development
-pnpm dev --filter=template
+pnpm dev
 ```
 
 **Access:**
@@ -97,22 +97,21 @@ pnpm dev --filter=template
 
 ```bash
 # Development
-pnpm dev                          # Start all apps
-pnpm dev --filter=app-name        # Start specific app
-pnpm build                        # Build all
-pnpm build --filter=app-name      # Build specific app
+pnpm dev                          # Start development server
+pnpm build                        # Build for production
+pnpm start                        # Start production server
 
 # Quality
 pnpm test                         # Run tests
 pnpm test:coverage                # With coverage
 pnpm lint                         # Lint code
 pnpm type-check                   # TypeScript check
-pnpm validate                     # All checks (pre-commit)
 
 # Database
-pnpm drizzle-kit generate         # Generate migrations
-pnpm drizzle-kit migrate          # Run migrations
-pnpm drizzle-kit push             # Quick push (solo dev)
+pnpm db:generate                  # Generate migrations
+pnpm db:migrate                   # Run migrations
+pnpm db:push                      # Quick push (solo dev)
+pnpm db:studio                    # Open Drizzle Studio
 ```
 
 ---
@@ -176,7 +175,6 @@ This is a living codebase. Your insights make it better. 🚀
 
 ### Performance
 
-- ✅ Fast build times (<2 min with Turborepo cache)
 - ✅ Lighthouse score >90
 - ✅ Core Web Vitals: Good (LCP <2.5s, FID <100ms, CLS <0.1)
 - ✅ Time to First Byte (TTFB) <600ms

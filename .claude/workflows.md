@@ -417,15 +417,6 @@ jobs:
       - run: pnpm install
       - run: pnpm build
 
-      # Enable Turborepo Remote Caching
-      - name: Setup Turborepo cache
-        uses: actions/cache@v3
-        with:
-          path: .turbo
-          key: ${{ runner.os }}-turbo-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-turbo-
-
   e2e:
     runs-on: ubuntu-latest
     steps:
@@ -452,8 +443,7 @@ jobs:
 **Configuration:**
 1. Connect GitHub repo to Vercel
 2. Configure project:
-   - Root Directory: `apps/invoice-saas`
-   - Build Command: `pnpm turbo run build --filter=invoice-saas`
+   - Build Command: `pnpm build`
    - Install Command: `pnpm install`
 3. Add environment variables
 4. Deploy on push to `main`
@@ -461,7 +451,6 @@ jobs:
 **Features:**
 - Automatic preview deployments for PRs
 - Production deployments on merge to main
-- Turborepo remote caching enabled
 - Environment variables configured in Vercel dashboard
 
 ---
@@ -472,7 +461,7 @@ jobs:
 
 **First prompt - Always start with context:**
 ```bash
-> Context: Building [your SaaS name] in Turborepo monorepo.
+> Context: Building [your SaaS name] application.
   Read .claude/CLAUDE.md for all architecture decisions and patterns.
   Current workflow mode: [Rapid/Production]
 
@@ -481,7 +470,7 @@ jobs:
 
 ### When Starting New Feature (Production Mode)
 ```bash
-> Context: Building invoice SaaS in Turborepo monorepo.
+> Context: Building invoice SaaS application.
   Reference: .claude docs for architecture patterns.
   Workflow: Production Mode
 
@@ -489,7 +478,7 @@ jobs:
 
   Steps:
   1. Create feature branch: feature/123-invoice-creation
-  2. Create feature structure in features/invoices/
+  2. Create feature structure in src/features/invoices/
   3. Define TypeScript types
   4. Create Zod validation schemas
   5. Write service tests FIRST (TDD)
@@ -506,14 +495,14 @@ jobs:
 
 ### When Starting New Feature (Rapid Mode)
 ```bash
-> Context: Building invoice SaaS in Turborepo monorepo.
+> Context: Building invoice SaaS application.
   Reference: .claude docs for architecture patterns.
   Workflow: Rapid Mode (work on main, skip issues)
 
   Goal: Implement invoice creation feature.
 
   Quick iteration approach:
-  1. Create feature structure in features/invoices/
+  1. Create feature structure in src/features/invoices/
   2. Define types and validation
   3. Write tests first (TDD for critical paths)
   4. Implement service and Server Action

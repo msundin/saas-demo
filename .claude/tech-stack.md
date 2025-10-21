@@ -1,24 +1,5 @@
 # Tech Stack (October 2025)
 
-## Reference Architecture
-
-**Inspiration:** [next-forge by Vercel](https://github.com/vercel/next-forge) - A production-grade Turborepo template
-
-**What we adopt from next-forge:**
-
-- ✅ Monorepo structure (apps/_ and packages/_)
-- ✅ Shared packages pattern
-- ✅ Testing approaches
-- ✅ Documentation style
-
-**What we adapt for our stack:**
-
-- 🔄 Supabase instead of Prisma + Neon
-- 🔄 Supabase Auth instead of Clerk
-- 🔄 Supabase client for app CRUD (RLS) + Drizzle for server-only complex queries
-
----
-
 ## Core Framework
 
 - **Next.js 15** (App Router, Server Components, Server Actions, PPR)
@@ -207,14 +188,6 @@ export const sendInvoice = inngest.createFunction(
 
 ---
 
-## Monorepo
-
-- **Turborepo** (build system)
-- **pnpm** (package manager)
-- **Workspace structure:** apps/_ and packages/_
-
----
-
 ## Deployment & Infrastructure
 
 - **Hosting:** Vercel (automatic deployments)
@@ -354,7 +327,6 @@ POSTHOG_API_KEY=xxx
 
 ### Tooling
 
-- [Turborepo Docs](https://turborepo.com/docs)
 - [pnpm Docs](https://pnpm.io)
 - [Vitest Docs](https://vitest.dev)
 - [Playwright Docs](https://playwright.dev)

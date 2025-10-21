@@ -1,4 +1,4 @@
-# Production SaaS Monorepo
+# SaaS Template
 
 # 🤖 FOR CLAUDE CODE: READ THIS FIRST
 
@@ -107,7 +107,7 @@ pnpm validate               # Run all quality checks
 ```
 
 **Template Reference:**
-Look at `apps/template/features/tasks/` for a complete feature example following all patterns.
+Look at `src/features/tasks/` for a complete feature example following all patterns.
 
 ---
 
