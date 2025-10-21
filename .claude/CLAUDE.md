@@ -127,12 +127,13 @@ pnpm drizzle-kit push             # Quick push (solo dev)
 6. **Run validation** before committing
 7. **Proactively suggest improvements** - Challenge patterns, propose better approaches
 8. **Security first** - Always check auth before using Drizzle
-9. **TDD Execution - MANDATORY:**
-   - After writing test: Run `pnpm test` → Show RED output
-   - After implementing: Run `pnpm test` → Show GREEN output
-   - Include test results in EVERY response during TDD
-   - NEVER implement without showing failed test first
-   - See [testing.md](./testing.md) for detailed TDD checklist
+9. **Test-First Development - MANDATORY:**
+   - Write comprehensive tests BEFORE implementation
+   - Cover happy path, edge cases, errors, and security scenarios
+   - Implement to pass all tests (aim for first-try success)
+   - Show test results after implementation
+   - 80%+ coverage required, never proceed with failing tests
+   - See [testing.md](./testing.md) for detailed approach
 
 ### 🎯 Your Mission: Maximum Efficiency & Correctness
 

@@ -42,68 +42,70 @@ Tests are NOT overhead - they make development FASTER by:
 
 ---
 
-## TDD Checklist (MANDATORY for Claude)
+## Test-First Development (MANDATORY for Claude)
 
-**For EVERY feature, follow this exact sequence:**
+**For EVERY feature, follow this sequence:**
 
-### ☐ Step 1: Write Test
+### ☐ Phase 1: Write Comprehensive Tests
+
+**BEFORE any implementation, write ALL test cases:**
 
 - Create test file: `__tests__/feature.test.ts`
-- Write test cases describing expected behavior
-- Include mocks for external dependencies (database, APIs, etc.)
+- Write comprehensive test suite covering:
+  - Happy path scenarios
+  - Edge cases and boundaries
+  - Error scenarios (validation failures, DB errors, auth failures)
+  - Security scenarios (unauthorized access, RLS violations)
+- Include mocks for external dependencies (database, APIs, auth, etc.)
 
 **Example:**
 
 ```typescript
 describe('TaskService', () => {
+  // Happy path
   it('should create a task with valid data', async () => {
-    // Mock Supabase client
     mockSupabaseClient.from.mockReturnValue({...})
-
     const task = await taskService.create(userId, data)
-
     expect(task.title).toBe('Test Task')
+  })
+
+  // Edge cases
+  it('should create a task without description', async () => {
+    const task = await taskService.create(userId, { title: 'Task' })
+    expect(task.description).toBeNull()
+  })
+
+  // Error scenarios
+  it('should throw error for empty title', async () => {
+    await expect(
+      taskService.create(userId, { title: '' })
+    ).rejects.toThrow('Title is required')
+  })
+
+  // Security
+  it('should only return tasks for the authenticated user', async () => {
+    const tasks = await taskService.getAll(userId)
+    expect(tasks.every(t => t.userId === userId)).toBe(true)
   })
 })
 ```
 
-### ☐ Step 2: Verify RED (Test MUST Fail)
+**Why comprehensive tests first:**
 
-**RUN:**
+- Defines all requirements upfront
+- Ensures edge cases aren't forgotten
+- Creates complete specification before coding
+- Prevents scope creep during implementation
 
-```bash
-pnpm test feature.test.ts
-```
+### ☐ Phase 2: Implement to Pass All Tests
 
-**EXPECT:**
+**Write implementation to satisfy the test suite:**
 
-- ❌ Test failures
-- Error messages about missing implementation OR
-- Assertion failures
-
-**SHOW:**
-
-- Include test output in response
-- Show the failure message
-
-**IF PASSING:**
-
-- ⚠️ Test is useless!
-- Rewrite test to actually verify behavior
-
-**Example Output:**
-
-```
-❌ FAIL  src/features/tasks/__tests__/task.service.test.ts
-  ● TaskService › create › should create a task
-    Cannot find module '../services/task.service'
-```
-
-### ☐ Step 3: Implement Minimal Code
-
-- Write ONLY enough code to make THIS test pass
-- Don't add extra features
-- Keep it simple
+- Implement complete functionality
+- Aim to pass all tests on first run
+- Follow architecture patterns (services, actions, validation)
+- Use TypeScript strict mode
+- Add proper error handling
 
 **Example:**
 
@@ -111,21 +113,46 @@ pnpm test feature.test.ts
 // services/task.service.ts
 export class TaskService {
   async create(userId: string, data: CreateTaskInput) {
-    // Minimal implementation
+    // Validate input
+    const validatedData = createTaskSchema.parse(data);
+
     const supabase = await createClient();
     const { data: task, error } = await supabase
       .from("tasks")
-      .insert({ user_id: userId, ...data })
+      .insert({
+        user_id: userId,
+        title: validatedData.title,
+        description: validatedData.description || null,
+        completed: false,
+      })
       .select()
       .single();
 
-    if (error) throw new Error(error.message);
-    return task;
+    if (error) {
+      throw new Error(`Failed to create task: ${error.message}`);
+    }
+
+    return task as Task;
+  }
+
+  async getAll(userId: string): Promise<Task[]> {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("tasks")
+      .select("*")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      throw new Error(`Failed to fetch tasks: ${error.message}`);
+    }
+
+    return (data as Task[]) || [];
   }
 }
 ```
 
-### ☐ Step 4: Verify GREEN (Test MUST Pass)
+### ☐ Phase 3: Verify All Tests Pass
 
 **RUN:**
 
@@ -135,193 +162,277 @@ pnpm test feature.test.ts
 
 **EXPECT:**
 
-- ✅ All tests passing
-- No errors
+- ✅ All tests passing on first run (ideal)
+- If some fail, debug and fix until all green
 
 **SHOW:**
 
 - Include test output in response
-- Show passing tests
+- Show all passing tests
 
 **IF FAILING:**
 
-- Debug until green
-- Don't move to next feature
+- Debug and fix issues
+- Re-run tests until all pass
+- Don't proceed to next feature with failing tests
 
 **Example Output:**
 
 ```
-✓ PASS  src/features/tasks/__tests__/task.service.test.ts
-  ✓ TaskService › create › should create a task (15ms)
+✓ src/features/tasks/__tests__/task.service.test.ts (9 tests) 4ms
+  ✓ TaskService
+    ✓ should create a task with valid data (2ms)
+    ✓ should create a task without description (1ms)
+    ✓ should throw error for empty title (1ms)
+    ✓ should only return tasks for authenticated user (0ms)
+    ...
+
+Test Files  1 passed (1)
+     Tests  9 passed (9)
 ```
 
-### ☐ Step 5: Refactor (Keep GREEN)
+### ☐ Phase 4: Verify Coverage
 
-- Clean up code if needed
-- Extract duplicates
-- Improve naming
-- Tests MUST stay passing
-
-**RUN tests after every refactor:**
+**RUN:**
 
 ```bash
-pnpm test:watch
+pnpm test:coverage
 ```
 
-### ☐ Step 6: Next Test
+**VERIFY:**
 
-- Write next test case
-- Repeat steps 2-5
+- 80%+ coverage for new code
+- Critical paths have 100% coverage (auth, payments, mutations)
+
+**IF BELOW TARGET:**
+
+- Add missing test cases
+- Re-run coverage check
 
 ---
 
-## RED Flags (You're Doing TDD Wrong)
+## RED Flags (You're Doing Test-First Wrong)
 
-❌ **Writing implementation before running tests**
+❌ **Writing implementation before tests**
 
-- Violation: No Red phase
-- Fix: Delete implementation, start over
+- Violation: No test specification
+- Fix: Write tests FIRST, then implement
 
-❌ **Tests passing on first run**
+❌ **Incomplete test coverage**
 
-- Violation: Test doesn't verify anything
-- Fix: Rewrite test to actually fail first
+- Violation: Missing edge cases or error scenarios
+- Fix: Write comprehensive test suite (happy path, edges, errors, security)
 
-❌ **Writing multiple tests before any pass**
+❌ **Not running tests after implementation**
 
-- Violation: Not incremental
-- Fix: Focus on ONE test at a time
+- Violation: No verification that code works
+- Fix: ALWAYS run tests and show output
 
-❌ **Skipping test execution to "save time"**
+❌ **Proceeding with failing tests**
 
-- Violation: No feedback loop
-- Fix: ALWAYS run tests between steps
+- Violation: Broken code in codebase
+- Fix: Debug and fix until all tests pass
 
 ❌ **Mocking after implementation**
 
 - Violation: Tests coupled to implementation
-- Fix: Mock dependencies BEFORE implementing
+- Fix: Mock dependencies when writing tests (before implementation)
 
 ❌ **Not showing test output in responses**
 
-- Violation: Can't verify TDD was followed
-- Fix: Include test output for Red AND Green phases
+- Violation: Can't verify tests passed
+- Fix: Include test output after implementation
+
+❌ **Below 80% coverage**
+
+- Violation: Insufficient testing
+- Fix: Add more test cases until coverage target met
 
 ---
 
-## TDD Process Example (Complete Cycle)
+## Test-First Process Example (Complete Feature)
 
-### Cycle 1: Create Task
+### Feature: Task Service
 
-**1. Write test:**
+**Phase 1: Write All Tests First**
 
 ```typescript
-it('should create a task with valid data', async () => {
-  mockSupabaseClient.from.mockReturnValue({...})
-  const task = await taskService.create(userId, { title: 'Test' })
-  expect(task.title).toBe('Test')
+// __tests__/task.service.test.ts
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { taskService } from '../services/task.service'
+
+const mockSupabaseClient = { from: vi.fn() }
+vi.mock('@/lib/supabase/server', () => ({
+  createClient: vi.fn(() => mockSupabaseClient),
+}))
+
+describe('TaskService', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  // Happy path
+  it('should create a task with valid data', async () => {
+    mockSupabaseClient.from.mockReturnValue({
+      insert: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnValue({
+          single: vi.fn().mockResolvedValue({
+            data: { id: '1', title: 'Test', userId: 'user-1' },
+            error: null
+          }),
+        }),
+      }),
+    })
+
+    const task = await taskService.create('user-1', { title: 'Test' })
+    expect(task.title).toBe('Test')
+  })
+
+  // Edge case
+  it('should create task without description', async () => {
+    mockSupabaseClient.from.mockReturnValue({...})
+    const task = await taskService.create('user-1', { title: 'Test' })
+    expect(task.description).toBeNull()
+  })
+
+  // Error scenario
+  it('should throw error for empty title', async () => {
+    await expect(
+      taskService.create('user-1', { title: '' })
+    ).rejects.toThrow('Title is required')
+  })
+
+  // Database error handling
+  it('should throw error when database operation fails', async () => {
+    mockSupabaseClient.from.mockReturnValue({
+      insert: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnValue({
+          single: vi.fn().mockResolvedValue({
+            data: null,
+            error: { message: 'Database error' }
+          }),
+        }),
+      }),
+    })
+
+    await expect(
+      taskService.create('user-1', { title: 'Test' })
+    ).rejects.toThrow('Failed to create task')
+  })
 })
 ```
 
-**2. Run test (RED):**
-
-```bash
-pnpm test
-# ❌ Cannot find module '../services/task.service'
-```
-
-**3. Implement:**
+**Phase 2: Implement Complete Feature**
 
 ```typescript
+// services/task.service.ts
+import { createClient } from "@/lib/supabase/server";
+import {
+  createTaskSchema,
+  type CreateTaskInput,
+} from "../validations/task.schema";
+import type { Task } from "@/lib/drizzle/schema";
+
 export class TaskService {
-  async create(userId, data) {
-    // minimal implementation
+  async create(userId: string, input: CreateTaskInput): Promise<Task> {
+    const validatedData = createTaskSchema.parse(input);
+    const supabase = await createClient();
+
+    const { data, error } = await supabase
+      .from("tasks")
+      .insert({
+        user_id: userId,
+        title: validatedData.title,
+        description: validatedData.description || null,
+        completed: false,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      throw new Error(`Failed to create task: ${error.message}`);
+    }
+
+    return data as Task;
   }
 }
+
+export const taskService = new TaskService();
 ```
 
-**4. Run test (GREEN):**
+**Phase 3: Run Tests**
 
 ```bash
-pnpm test
-# ✅ Tests passed
+pnpm test task.service.test.ts
+
+# Output:
+✓ src/features/tasks/__tests__/task.service.test.ts (4 tests) 3ms
+  ✓ TaskService
+    ✓ should create a task with valid data (1ms)
+    ✓ should create task without description (1ms)
+    ✓ should throw error for empty title (0ms)
+    ✓ should throw error when database operation fails (1ms)
+
+Test Files  1 passed (1)
+     Tests  4 passed (4)
 ```
 
-### Cycle 2: Validate Empty Title
-
-**1. Write test:**
-
-```typescript
-it("should throw error for empty title", async () => {
-  await expect(taskService.create(userId, { title: "" })).rejects.toThrow(
-    "Title is required",
-  );
-});
-```
-
-**2. Run test (RED):**
-
-```bash
-pnpm test
-# ❌ Expected error but none was thrown
-```
-
-**3. Implement:**
-
-```typescript
-async create(userId, data) {
-  const validated = createTaskSchema.parse(data) // Adds validation
-  // ...
-}
-```
-
-**4. Run test (GREEN):**
-
-```bash
-pnpm test
-# ✅ All 2 tests passed
-```
-
-**Repeat for each test case...**
+**All tests pass on first implementation! ✅**
 
 ---
 
 ## For Claude Code Assistant
 
-**When implementing features with TDD:**
+**When implementing features with Test-First approach:**
 
 ### MANDATORY Steps:
 
-1. **After writing tests:**
-   - Run: `pnpm test feature.test.ts`
-   - Show: RED output in response
-   - Verify: Tests fail with expected errors
+1. **Before ANY implementation:**
+   - Write comprehensive test suite
+   - Cover: happy path, edge cases, errors, security
+   - Mock external dependencies (DB, APIs, auth)
 
-2. **After implementing:**
+2. **After writing tests:**
+   - Implement complete feature
+   - Aim to pass all tests on first run
+   - Follow architecture patterns
+
+3. **After implementing:**
    - Run: `pnpm test feature.test.ts`
-   - Show: GREEN output in response
+   - Show: Test output in response
    - Verify: All tests pass
 
-3. **Include in EVERY response during TDD:**
+4. **Include test output in response:**
 
    ```
-   ## Test Output (RED)
-   [paste test failures]
+   ## Tests Written
+   [list of test cases]
 
    ## Implementation
    [code]
 
-   ## Test Output (GREEN)
-   [paste test passes]
+   ## Test Output
+   ✓ All tests passing
+   [paste test results]
    ```
 
 ### Blocking Rules:
 
-- **NEVER implement without showing RED first**
-- **NEVER proceed to next feature with failing tests**
+- **NEVER implement before writing tests**
+- **NEVER proceed with failing tests**
 - **NEVER skip showing test output**
+- **NEVER accept <80% coverage**
 
-If you violate these rules, you're not doing TDD.
+### When Traditional TDD Makes Sense:
+
+Use RED-GREEN-REFACTOR cycle when:
+
+- Exploring unfamiliar APIs or patterns
+- Debugging complex issues
+- Implementation approach is unclear
+- User explicitly requests it
+
+In these cases, show RED output before implementation.
 
 ---
 
