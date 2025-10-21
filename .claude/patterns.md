@@ -16,61 +16,31 @@ These patterns are implemented in the task manager template. Examples match the 
 
 ### Row Level Security (RLS)
 
+**File:** `src/lib/drizzle/schema.ts`
+
 Always enable RLS on all tables. The template uses RLS on the `tasks` table:
 
 ```sql
--- Enable RLS (from actual schema)
 ALTER TABLE tasks ENABLE ROW LEVEL SECURITY;
 
--- Users see only their own tasks
-CREATE POLICY "Users can view their own tasks"
-  ON tasks FOR SELECT
-  TO public
-  USING (auth.uid() = user_id);
-
--- Users create only for themselves
-CREATE POLICY "Users can create their own tasks"
-  ON tasks FOR INSERT
-  TO public
-  WITH CHECK (auth.uid() = user_id);
-
--- Users update only their own tasks
-CREATE POLICY "Users can update their own tasks"
-  ON tasks FOR UPDATE
-  TO public
-  USING (auth.uid() = user_id);
-
--- Users delete only their own tasks
-CREATE POLICY "Users can delete their own tasks"
-  ON tasks FOR DELETE
-  TO public
+-- Pattern: auth.uid() = user_id for all CRUD operations
+CREATE POLICY "policy_name" ON tasks
+  FOR SELECT/INSERT/UPDATE/DELETE
   USING (auth.uid() = user_id);
 ```
 
-**From:** `src/lib/drizzle/schema.ts`
+**Key concept:** Every policy checks `auth.uid() = user_id` to ensure users only access their own data.
 
 ---
 
 ## Server Actions Pattern
 
-The template uses Server Actions for all mutations. Example from `src/features/tasks/actions/task-actions.ts`:
+**File:** `src/features/tasks/actions/task-actions.ts`
+
+The template uses Server Actions for all mutations. All actions follow this 5-step pattern:
 
 ```typescript
-'use server'
-
-import { revalidatePath } from 'next/cache'
-import { requireAuth } from '@/lib/auth/helpers'
-import { taskService } from '../services/task.service'
-import { createTaskSchema, type CreateTaskInput } from '../validations/task.schema'
-import type { Task } from '@/lib/drizzle/schema'
-
-type ActionResponse<T> =
-  | { success: true; data: T }
-  | { success: false; error: string }
-
-export async function createTask(
-  input: CreateTaskInput
-): Promise<ActionResponse<Task>> {
+export async function createTask(input: CreateTaskInput): Promise<ActionResponse<Task>> {
   try {
     // 1. Check authentication
     const user = await requireAuth()
@@ -78,29 +48,21 @@ export async function createTask(
     // 2. Validate input
     const validatedData = createTaskSchema.parse(input)
 
-    // 3. Create task via service
+    // 3. Business logic (via service layer)
     const task = await taskService.create(user.id, validatedData)
 
     // 4. Revalidate cache
     revalidatePath('/dashboard')
 
+    // 5. Type-safe response
     return { success: true, data: task }
   } catch (error) {
-    console.error('Create task error:', error)
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Failed to create task',
-    }
+    return { success: false, error: error.message }
   }
 }
 ```
 
-**Key Pattern:**
-1. Authentication check FIRST
-2. Input validation (Zod)
-3. Business logic (via service layer)
-4. Cache revalidation
-5. Type-safe error handling
+**Always in this order:** Auth → Validate → Logic → Cache → Response
 
 ---
 
@@ -136,102 +98,40 @@ export type CreateTaskInput = z.infer<typeof createTaskSchema>
 
 ## Service Layer Pattern
 
-Business logic is isolated in service classes. From `src/features/tasks/services/task.service.ts`:
+**File:** `src/features/tasks/services/task.service.ts`
+
+Business logic is isolated in service classes. The template implements:
 
 ```typescript
-import { createClient } from '@/lib/supabase/server'
-import type { Task } from '@/lib/drizzle/schema'
-import type { CreateTaskInput } from '../validations/task.schema'
-
 export class TaskService {
-  async create(userId: string, input: CreateTaskInput): Promise<Task> {
-    const supabase = await createClient()
-
-    const { data, error } = await supabase
-      .from('tasks')
-      .insert({
-        user_id: userId,
-        title: input.title,
-        description: input.description || null,
-        completed: false,
-      })
-      .select()
-      .single()
-
-    if (error) {
-      throw new Error(`Failed to create task: ${error.message}`)
-    }
-
-    return data as Task
-  }
-
-  async getAll(userId: string): Promise<Task[]> {
-    const supabase = await createClient()
-
-    const { data, error } = await supabase
-      .from('tasks')
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false })
-
-    if (error) {
-      throw new Error(`Failed to fetch tasks: ${error.message}`)
-    }
-
-    return (data as Task[]) || []
-  }
-
-  async toggle(taskId: string, userId: string): Promise<Task> {
-    const supabase = await createClient()
-
-    // Get current task
-    const { data: currentTask, error: fetchError } = await supabase
-      .from('tasks')
-      .select('completed')
-      .eq('id', taskId)
-      .eq('user_id', userId)
-      .single()
-
-    if (fetchError || !currentTask) {
-      throw new Error('Task not found')
-    }
-
-    // Toggle completion
-    const { data, error } = await supabase
-      .from('tasks')
-      .update({ completed: !currentTask.completed })
-      .eq('id', taskId)
-      .eq('user_id', userId)
-      .select()
-      .single()
-
-    if (error) {
-      throw new Error(`Failed to toggle task: ${error.message}`)
-    }
-
-    return data as Task
-  }
-
-  async delete(taskId: string, userId: string): Promise<void> {
-    const supabase = await createClient()
-
-    const { error } = await supabase
-      .from('tasks')
-      .delete()
-      .eq('id', taskId)
-      .eq('user_id', userId)
-
-    if (error) {
-      throw new Error(`Failed to delete task: ${error.message}`)
-    }
-  }
+  async create(userId: string, input: CreateTaskInput): Promise<Task>
+  async getAll(userId: string): Promise<Task[]>
+  async toggle(taskId: string, userId: string): Promise<Task>
+  async delete(taskId: string, userId: string): Promise<void>
 }
 
 export const taskService = new TaskService()
 ```
 
+**Pattern (example from `create` method):**
+```typescript
+async create(userId: string, input: CreateTaskInput): Promise<Task> {
+  // 1. Get Supabase client
+  const supabase = await createClient()
+
+  // 2. Insert with user_id + validated data
+  const { data, error } = await supabase
+    .from('tasks')
+    .insert({ user_id: userId, ...input })
+
+  // 3. Handle errors, return typed result
+  if (error) throw new Error(`Failed: ${error.message}`)
+  return data as Task
+}
+```
+
 **Why Service Layer:**
-- Testable business logic
+- Testable business logic in isolation
 - Reusable across Server Actions
 - Clear separation of concerns
 - Easy to mock in tests
@@ -297,43 +197,27 @@ const { data } = await supabase
 
 ## Database Schema (Drizzle)
 
-Schema is generated from Supabase migrations via introspection. From `src/lib/drizzle/schema.ts`:
+**File:** `src/lib/drizzle/schema.ts`
+
+Schema is generated from Supabase migrations via introspection. Pattern:
 
 ```typescript
-import {
-  pgTable,
-  pgPolicy,
-  uuid,
-  text,
-  boolean,
-  timestamp,
-} from 'drizzle-orm/pg-core'
-import { sql } from 'drizzle-orm'
+import { pgTable, pgPolicy, uuid, text, boolean, timestamp } from 'drizzle-orm/pg-core'
 
 export const tasks = pgTable(
   'tasks',
   {
     id: uuid().defaultRandom().primaryKey().notNull(),
     title: text().notNull(),
-    description: text(),
-    completed: boolean().default(false).notNull(),
     userId: uuid('user_id').notNull(),
-    createdAt: timestamp('created_at', { mode: 'string' })
-      .defaultNow()
-      .notNull(),
-    updatedAt: timestamp('updated_at', { mode: 'string' })
-      .defaultNow()
-      .notNull(),
+    // ... other columns
   },
   (_table) => [
-    // RLS policies defined here
-    pgPolicy('Users can delete their own tasks', {
+    pgPolicy('policy_name', {
       as: 'permissive',
-      for: 'delete',
-      to: ['public'],
+      for: 'select', // or insert/update/delete
       using: sql`(auth.uid() = user_id)`,
     }),
-    // ... more policies
   ]
 )
 
