@@ -70,6 +70,7 @@ pnpm supabase init
 pnpm supabase start
 
 # 4. Generate types and run migrations
+mkdir -p types
 pnpm supabase gen types typescript --local > types/database.ts
 pnpm db:migrate
 
@@ -198,4 +199,6 @@ This is a living codebase. Your insights make it better. 🚀
 
 **Last Updated:** October 2025
 **Version:** 2.0.0 (2025 Best Practices)
-**Status:** Production Ready
+**Status:** Backend Complete - Frontend Pending
+
+**Note:** Backend (service layer, Server Actions, validation, RLS policies, tests) is production-ready and fully functional. Frontend UI components (auth pages, dashboard, task components) are not yet implemented.

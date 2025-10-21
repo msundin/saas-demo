@@ -38,6 +38,9 @@ lerna-debug.log*
 # Local Supabase
 .supabase/
 
+# Supabase generated types
+types/database.ts
+
 # Turborepo
 .turbo/
 
@@ -96,6 +99,8 @@ yarn-error.log*
 .pnpm-debug.log*
 
 # env files (can opt-in for committing if needed)
+# Allow .env.example to be committed
+!.env.example
 .env*
 
 # vercel

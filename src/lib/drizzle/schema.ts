@@ -24,26 +24,30 @@ export const tasks = pgTable(
       .notNull(),
   },
   (_table) => [
-    pgPolicy('Users can delete their own tasks', {
+    pgPolicy('Users can view their own tasks', {
       as: 'permissive',
-      for: 'delete',
+      for: 'select',
       to: ['public'],
       using: sql`(auth.uid() = user_id)`,
-    }),
-    pgPolicy('Users can update their own tasks', {
-      as: 'permissive',
-      for: 'update',
-      to: ['public'],
     }),
     pgPolicy('Users can create their own tasks', {
       as: 'permissive',
       for: 'insert',
       to: ['public'],
+      withCheck: sql`(auth.uid() = user_id)`,
     }),
-    pgPolicy('Users can view their own tasks', {
+    pgPolicy('Users can update their own tasks', {
       as: 'permissive',
-      for: 'select',
+      for: 'update',
       to: ['public'],
+      using: sql`(auth.uid() = user_id)`,
+      withCheck: sql`(auth.uid() = user_id)`,
+    }),
+    pgPolicy('Users can delete their own tasks', {
+      as: 'permissive',
+      for: 'delete',
+      to: ['public'],
+      using: sql`(auth.uid() = user_id)`,
     }),
   ]
 )
