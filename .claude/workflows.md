@@ -41,14 +41,14 @@
 
 **Commit format:**
 ```bash
-git commit -m "feat(invoices): add invoice creation form
+git commit -m "feat(tasks): add task completion toggle
 
-- Added form component with validation
+- Added toggle functionality
 - Integrated with Supabase
-- Added basic error handling"
+- Added optimistic updates"
 
 # Or if you have an issue:
-git commit -m "feat(invoices): add invoice creation form (#123)"
+git commit -m "feat(tasks): add task completion toggle (#123)"
 ```
 
 ---
@@ -64,22 +64,22 @@ git commit -m "feat(invoices): add invoice creation form (#123)"
 **Process:**
 1. Create GitHub issue for each feature
 2. Create feature branch from `main`
-3. Reference issue in branch name: `feature/123-invoice-creation`
-4. Make commits with issue reference: `feat(invoices): add form (#123)`
+3. Reference issue in branch name: `feature/123-add-task-filter`
+4. Make commits with issue reference: `feat(tasks): add task filter (#123)`
 5. Open PR when ready
 6. Code review required
 7. Merge to `main` after approval
 
 **Branch naming:**
 ```bash
-feature/123-invoice-creation
-fix/456-invoice-validation
-refactor/789-invoice-service
+feature/123-add-task-filter
+fix/456-task-validation
+refactor/789-task-service
 ```
 
 **Commit format with issue:**
 ```bash
-git commit -m "feat(invoices): add invoice creation form (#123)
+git commit -m "feat(tasks): add task filtering by status (#123)
 
 - Implements user story from #123
 - Added comprehensive validation
@@ -121,31 +121,31 @@ Build features in small, testable increments. Each increment should be:
 
 **Step 2: Create Feature Branch**
 ```bash
-git checkout -b feature/123-invoice-creation
+git checkout -b feature/123-add-task-filter
 ```
 
 **Step 3: Implement (TDD approach)**
 ```bash
-# 1. Write types
-touch features/invoices/types/invoice.types.ts
+# 1. Write types (if needed)
+touch features/tasks/types/task-filter.types.ts
 
-# 2. Write validation schema
-touch features/invoices/validations/invoice.schema.ts
+# 2. Write validation schema (if needed)
+touch features/tasks/validations/task-filter.schema.ts
 
 # 3. Write tests FIRST
-touch features/invoices/__tests__/invoice.service.test.ts
+touch features/tasks/__tests__/task-filter.test.ts
 
-# 4. Implement service
-touch features/invoices/services/invoice.service.ts
+# 4. Implement service method
+# Edit features/tasks/services/task.service.ts
 
-# 5. Write Server Action
-touch features/invoices/actions/invoice-actions.ts
+# 5. Write Server Action (if needed)
+# Edit features/tasks/actions/task-actions.ts
 
 # 6. Write component tests
-touch features/invoices/__tests__/InvoiceForm.test.tsx
+touch features/tasks/__tests__/TaskFilter.test.tsx
 
 # 7. Implement UI
-touch features/invoices/components/InvoiceForm.tsx
+touch features/tasks/components/TaskFilter.tsx
 ```
 
 **Step 4: Validate Quality**
@@ -169,13 +169,13 @@ pnpm validate  # runs all of the above
 git add .
 
 # Production Mode (with issue reference)
-git commit -m "feat(invoices): add invoice creation (#123)"
+git commit -m "feat(tasks): add task filtering by status (#123)"
 
 # Rapid Mode (descriptive message)
-git commit -m "feat(invoices): add invoice creation with validation"
+git commit -m "feat(tasks): add task filtering with status dropdown"
 
 # Push (adjust branch name based on mode)
-git push origin feature/123-invoice-creation  # Production
+git push origin feature/123-add-task-filter  # Production
 git push origin main                          # Rapid
 ```
 
@@ -196,9 +196,9 @@ git push origin main                          # Rapid
 
 ### Branch Naming (Production Mode)
 ```bash
-feature/123-invoice-creation    # With issue number
-fix/456-invoice-validation      # Bug fix with issue
-refactor/789-invoice-service    # Refactor with issue
+feature/123-add-task-filter     # With issue number
+fix/456-task-validation         # Bug fix with issue
+refactor/789-task-service       # Refactor with issue
 docs/update-readme              # No issue needed for docs
 ```
 
@@ -221,20 +221,20 @@ main    # Work directly on main
 
 **Examples with issue reference (Production Mode):**
 ```bash
-feat(invoices): add invoice creation form (#123)
+feat(tasks): add task filtering by status (#123)
 fix(auth): resolve login redirect issue (#456)
 refactor(ui): extract button component (#789)
 docs: update API documentation
-test(invoices): add invoice service tests (#123)
+test(tasks): add task filter tests (#123)
 chore: update dependencies
 ```
 
 **Examples without issue reference (Rapid Mode):**
 ```bash
-feat(invoices): add invoice creation form
+feat(tasks): add task filtering by status
 
-- Added form validation with Zod
-- Integrated with Supabase
+- Added filter dropdown with all/active/completed
+- Integrated with URL search params
 - Added loading states
 
 fix(auth): resolve login redirect issue
@@ -267,14 +267,8 @@ Automatically runs before each commit:
 # Start all apps
 pnpm dev
 
-# Start specific app
-pnpm dev --filter=invoice-saas
-
 # Build all
 pnpm build
-
-# Build specific app
-pnpm build --filter=invoice-saas
 ```
 
 ### Testing
@@ -470,23 +464,23 @@ jobs:
 
 ### When Starting New Feature (Production Mode)
 ```bash
-> Context: Building invoice SaaS application.
+> Context: Building task manager application.
   Reference: .claude docs for architecture patterns.
   Workflow: Production Mode
 
-  Goal: Implement invoice creation feature for GitHub issue #123.
+  Goal: Implement task filtering feature for GitHub issue #123.
 
   Steps:
-  1. Create feature branch: feature/123-invoice-creation
-  2. Create feature structure in src/features/invoices/
-  3. Define TypeScript types
-  4. Create Zod validation schemas
+  1. Create feature branch: feature/123-add-task-filter
+  2. Extend feature structure in src/features/tasks/
+  3. Define TypeScript types (if needed)
+  4. Create Zod validation schemas (if needed)
   5. Write service tests FIRST (TDD)
-  6. Implement InvoiceService
-  7. Create Server Action
-  8. Build UI components
+  6. Implement filter method in TaskService
+  7. Update Server Action (if needed)
+  8. Build UI components (filter dropdown)
   9. Add integration tests
-  10. Commit with issue reference: "feat(invoices): add invoice creation (#123)"
+  10. Commit with issue reference: "feat(tasks): add task filtering (#123)"
 
   Follow the exact structure in .claude/architecture.md.
   Write tests for everything.
@@ -495,18 +489,18 @@ jobs:
 
 ### When Starting New Feature (Rapid Mode)
 ```bash
-> Context: Building invoice SaaS application.
+> Context: Building task manager application.
   Reference: .claude docs for architecture patterns.
   Workflow: Rapid Mode (work on main, skip issues)
 
-  Goal: Implement invoice creation feature.
+  Goal: Implement task filtering feature.
 
   Quick iteration approach:
-  1. Create feature structure in src/features/invoices/
-  2. Define types and validation
+  1. Extend feature structure in src/features/tasks/
+  2. Define types and validation (if needed)
   3. Write tests first (TDD for critical paths)
-  4. Implement service and Server Action
-  5. Build UI components
+  4. Implement service method and update Server Action
+  5. Build UI components (filter dropdown)
   6. Commit to main with clear message
 
   Maintain quality: 80%+ coverage, all security checks.

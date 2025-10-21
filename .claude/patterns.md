@@ -1,30 +1,359 @@
 # Common SaaS Patterns
 
+This document is split into two parts:
+- **Part 1:** Patterns USED in the template app (examples match actual code)
+- **Part 2:** Advanced patterns for production apps (beyond template scope)
+
+---
+
+# PART 1: Template Patterns (Implemented)
+
+These patterns are implemented in the task manager template. Examples match the actual codebase.
+
+---
+
 ## Security Best Practices
 
 ### Row Level Security (RLS)
 
-Always enable RLS on all tables:
-```sql
--- Enable RLS
-ALTER TABLE invoices ENABLE ROW LEVEL SECURITY;
+Always enable RLS on all tables. The template uses RLS on the `tasks` table:
 
--- Users see only their own data
-CREATE POLICY "Users view own invoices"
-  ON invoices FOR SELECT
+```sql
+-- Enable RLS (from actual schema)
+ALTER TABLE tasks ENABLE ROW LEVEL SECURITY;
+
+-- Users see only their own tasks
+CREATE POLICY "Users can view their own tasks"
+  ON tasks FOR SELECT
+  TO public
   USING (auth.uid() = user_id);
 
 -- Users create only for themselves
-CREATE POLICY "Users create own invoices"
-  ON invoices FOR INSERT
+CREATE POLICY "Users can create their own tasks"
+  ON tasks FOR INSERT
+  TO public
   WITH CHECK (auth.uid() = user_id);
+
+-- Users update only their own tasks
+CREATE POLICY "Users can update their own tasks"
+  ON tasks FOR UPDATE
+  TO public
+  USING (auth.uid() = user_id);
+
+-- Users delete only their own tasks
+CREATE POLICY "Users can delete their own tasks"
+  ON tasks FOR DELETE
+  TO public
+  USING (auth.uid() = user_id);
+```
+
+**From:** `src/lib/drizzle/schema.ts`
+
+---
+
+## Server Actions Pattern
+
+The template uses Server Actions for all mutations. Example from `src/features/tasks/actions/task-actions.ts`:
+
+```typescript
+'use server'
+
+import { revalidatePath } from 'next/cache'
+import { requireAuth } from '@/lib/auth/helpers'
+import { taskService } from '../services/task.service'
+import { createTaskSchema, type CreateTaskInput } from '../validations/task.schema'
+import type { Task } from '@/lib/drizzle/schema'
+
+type ActionResponse<T> =
+  | { success: true; data: T }
+  | { success: false; error: string }
+
+export async function createTask(
+  input: CreateTaskInput
+): Promise<ActionResponse<Task>> {
+  try {
+    // 1. Check authentication
+    const user = await requireAuth()
+
+    // 2. Validate input
+    const validatedData = createTaskSchema.parse(input)
+
+    // 3. Create task via service
+    const task = await taskService.create(user.id, validatedData)
+
+    // 4. Revalidate cache
+    revalidatePath('/dashboard')
+
+    return { success: true, data: task }
+  } catch (error) {
+    console.error('Create task error:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to create task',
+    }
+  }
+}
+```
+
+**Key Pattern:**
+1. Authentication check FIRST
+2. Input validation (Zod)
+3. Business logic (via service layer)
+4. Cache revalidation
+5. Type-safe error handling
+
+---
+
+## Validation with Zod
+
+All user inputs are validated with Zod schemas. From `src/features/tasks/validations/task.schema.ts`:
+
+```typescript
+import { z } from 'zod'
+
+export const createTaskSchema = z.object({
+  title: z
+    .string()
+    .min(1, 'Title is required')
+    .max(200, 'Title must be less than 200 characters'),
+  description: z
+    .string()
+    .max(1000, 'Description must be less than 1000 characters')
+    .optional()
+    .nullable(),
+})
+
+export type CreateTaskInput = z.infer<typeof createTaskSchema>
+```
+
+**Benefits:**
+- Type-safe validation
+- User-friendly error messages
+- Reusable across Server Actions and client forms
+- Automatic TypeScript types
+
+---
+
+## Service Layer Pattern
+
+Business logic is isolated in service classes. From `src/features/tasks/services/task.service.ts`:
+
+```typescript
+import { createClient } from '@/lib/supabase/server'
+import type { Task } from '@/lib/drizzle/schema'
+import type { CreateTaskInput } from '../validations/task.schema'
+
+export class TaskService {
+  async create(userId: string, input: CreateTaskInput): Promise<Task> {
+    const supabase = await createClient()
+
+    const { data, error } = await supabase
+      .from('tasks')
+      .insert({
+        user_id: userId,
+        title: input.title,
+        description: input.description || null,
+        completed: false,
+      })
+      .select()
+      .single()
+
+    if (error) {
+      throw new Error(`Failed to create task: ${error.message}`)
+    }
+
+    return data as Task
+  }
+
+  async getAll(userId: string): Promise<Task[]> {
+    const supabase = await createClient()
+
+    const { data, error } = await supabase
+      .from('tasks')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+
+    if (error) {
+      throw new Error(`Failed to fetch tasks: ${error.message}`)
+    }
+
+    return (data as Task[]) || []
+  }
+
+  async toggle(taskId: string, userId: string): Promise<Task> {
+    const supabase = await createClient()
+
+    // Get current task
+    const { data: currentTask, error: fetchError } = await supabase
+      .from('tasks')
+      .select('completed')
+      .eq('id', taskId)
+      .eq('user_id', userId)
+      .single()
+
+    if (fetchError || !currentTask) {
+      throw new Error('Task not found')
+    }
+
+    // Toggle completion
+    const { data, error } = await supabase
+      .from('tasks')
+      .update({ completed: !currentTask.completed })
+      .eq('id', taskId)
+      .eq('user_id', userId)
+      .select()
+      .single()
+
+    if (error) {
+      throw new Error(`Failed to toggle task: ${error.message}`)
+    }
+
+    return data as Task
+  }
+
+  async delete(taskId: string, userId: string): Promise<void> {
+    const supabase = await createClient()
+
+    const { error } = await supabase
+      .from('tasks')
+      .delete()
+      .eq('id', taskId)
+      .eq('user_id', userId)
+
+    if (error) {
+      throw new Error(`Failed to delete task: ${error.message}`)
+    }
+  }
+}
+
+export const taskService = new TaskService()
+```
+
+**Why Service Layer:**
+- Testable business logic
+- Reusable across Server Actions
+- Clear separation of concerns
+- Easy to mock in tests
+
+---
+
+## Authentication Pattern
+
+The template uses Supabase Auth with helper functions. From `src/lib/auth/helpers.ts`:
+
+```typescript
+import { createClient } from '@/lib/supabase/server'
+
+export async function getCurrentUser() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  return user
+}
+
+export async function requireAuth() {
+  const user = await getCurrentUser()
+
+  if (!user) {
+    throw new Error('Unauthorized')
+  }
+
+  return user
+}
+```
+
+**Usage in Server Actions:**
+```typescript
+export async function createTask(input: CreateTaskInput) {
+  // This throws if not authenticated
+  const user = await requireAuth()
+
+  // Proceed with authenticated logic...
+}
 ```
 
 ---
 
-### Multi-Tenancy Pattern (Organizations/Workspaces)
+## Supabase Client (RLS Enforced)
 
-Most B2B SaaS requires team-based access, not just individual users.
+For simple CRUD operations, use Supabase client. RLS automatically filters by user.
+
+```typescript
+// From task.service.ts - RLS enforced
+const { data } = await supabase
+  .from('tasks')
+  .select('*')
+  .eq('user_id', userId) // RLS double-checks this
+  .order('created_at', { ascending: false })
+```
+
+**Benefits:**
+- RLS policies automatically enforced
+- No manual authorization needed
+- Works in Server Components and Server Actions
+- Safe for client-side queries (with proper RLS)
+
+---
+
+## Database Schema (Drizzle)
+
+Schema is generated from Supabase migrations via introspection. From `src/lib/drizzle/schema.ts`:
+
+```typescript
+import {
+  pgTable,
+  pgPolicy,
+  uuid,
+  text,
+  boolean,
+  timestamp,
+} from 'drizzle-orm/pg-core'
+import { sql } from 'drizzle-orm'
+
+export const tasks = pgTable(
+  'tasks',
+  {
+    id: uuid().defaultRandom().primaryKey().notNull(),
+    title: text().notNull(),
+    description: text(),
+    completed: boolean().default(false).notNull(),
+    userId: uuid('user_id').notNull(),
+    createdAt: timestamp('created_at', { mode: 'string' })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp('updated_at', { mode: 'string' })
+      .defaultNow()
+      .notNull(),
+  },
+  (_table) => [
+    // RLS policies defined here
+    pgPolicy('Users can delete their own tasks', {
+      as: 'permissive',
+      for: 'delete',
+      to: ['public'],
+      using: sql`(auth.uid() = user_id)`,
+    }),
+    // ... more policies
+  ]
+)
+
+export type Task = typeof tasks.$inferSelect
+export type NewTask = typeof tasks.$inferInsert
+```
+
+---
+
+# PART 2: Advanced Patterns (Beyond Template)
+
+These patterns are NOT implemented in the template but show how to extend it for production SaaS applications.
+
+---
+
+## Multi-Tenancy Pattern (Team Workspaces)
+
+**⚠️ Advanced: Beyond Template Scope**
+
+Most B2B SaaS requires team-based access, not just individual users. Here's how to extend the tasks app to support team workspaces:
 
 **Database Schema:**
 ```sql
@@ -46,19 +375,12 @@ CREATE TABLE organization_members (
   UNIQUE(organization_id, user_id)
 );
 
--- Invoices now belong to organizations
-CREATE TABLE invoices (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  organization_id UUID REFERENCES organizations(id) ON DELETE CASCADE,
-  created_by UUID REFERENCES auth.users(id),
-  amount DECIMAL NOT NULL,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
+-- Extend tasks to belong to organizations
+ALTER TABLE tasks ADD COLUMN organization_id UUID REFERENCES organizations(id) ON DELETE CASCADE;
 
 -- Enable RLS
 ALTER TABLE organizations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE organization_members ENABLE ROW LEVEL SECURITY;
-ALTER TABLE invoices ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policies for team-based access
 CREATE POLICY "Users view organizations they belong to"
@@ -70,8 +392,8 @@ CREATE POLICY "Users view organizations they belong to"
     )
   );
 
-CREATE POLICY "Team members view team invoices"
-  ON invoices FOR SELECT
+CREATE POLICY "Team members view team tasks"
+  ON tasks FOR SELECT
   USING (
     organization_id IN (
       SELECT organization_id FROM organization_members
@@ -79,8 +401,8 @@ CREATE POLICY "Team members view team invoices"
     )
   );
 
-CREATE POLICY "Admins and owners can create invoices"
-  ON invoices FOR INSERT
+CREATE POLICY "Admins and owners can create tasks"
+  ON tasks FOR INSERT
   WITH CHECK (
     organization_id IN (
       SELECT organization_id FROM organization_members
@@ -153,35 +475,36 @@ export async function hasOrganizationAccess(
 
 ---
 
-### Supabase vs Drizzle - When to Use What
+## Drizzle ORM for Complex Queries
 
-**Supabase Client (respects RLS automatically):**
+**⚠️ Advanced: Use with caution**
+
+For complex queries (joins, aggregations), use Drizzle ORM directly. **Important:** Drizzle bypasses RLS, so you MUST handle authorization manually.
+
 ```typescript
-'use client'
-// ✅ Client Components
-// ✅ Simple CRUD operations
-// ✅ When RLS policies handle authorization
-// ✅ Realtime subscriptions
+// ✅ GOOD - Complex query with manual auth check
+import { db } from '@/lib/drizzle/client'
+import { createClient } from '@/lib/supabase/server'
+import { eq } from 'drizzle-orm'
 
-const { data } = await supabase
-  .from('posts')
-  .select('*')
-  // RLS automatically filters by user!
-```
+export async function GET() {
+  // 1. Always verify auth when using Drizzle
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
 
-**Drizzle ORM (direct PostgreSQL access):**
-```typescript
-// ✅ Complex queries (joins, aggregations, subqueries)
-// ✅ Batch operations
-// ✅ Better TypeScript inference
-// ✅ Server-side only (Node.js runtime)
-// ⚠️ Must handle authorization manually!
+  if (!user) {
+    return Response.json({ error: 'Unauthorized' }, { status: 401 })
+  }
 
-const posts = await db
-  .select()
-  .from(postsTable)
-  .where(eq(postsTable.userId, userId)) // Manual filtering required!
-  .leftJoin(commentsTable, eq(postsTable.id, commentsTable.postId))
+  // 2. Manually filter by user - Drizzle bypasses RLS!
+  const tasks = await db
+    .select()
+    .from(tasksTable)
+    .where(eq(tasksTable.userId, user.id))
+    .orderBy(tasksTable.createdAt)
+
+  return Response.json(tasks)
+}
 ```
 
 **Critical Security Rule:**
@@ -192,53 +515,11 @@ const posts = await db
 
 ---
 
-### Environment Variables Security
+## Stripe Webhooks (Payments)
 
-```typescript
-// ❌ BAD - exposed to client
-STRIPE_SECRET_KEY=xxx
+**⚠️ Advanced: Beyond Template Scope**
 
-// ✅ GOOD - server-only
-// Access only in Server Actions or Server Components
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!)
-```
-
----
-
-### Rate Limiting
-
-Protect your API routes and Server Actions:
-
-```typescript
-// lib/rate-limit.ts
-import { Ratelimit } from '@upstash/ratelimit'
-import { Redis } from '@upstash/redis'
-
-export const ratelimit = new Ratelimit({
-  redis: Redis.fromEnv(),
-  limiter: Ratelimit.slidingWindow(10, '10 s'),
-  analytics: true,
-})
-
-// app/api/webhooks/stripe/route.ts
-export async function POST(req: Request) {
-  const ip = req.headers.get('x-forwarded-for') ?? 'anonymous'
-  const { success } = await ratelimit.limit(ip)
-
-  if (!success) {
-    return Response.json(
-      { error: 'Too many requests' },
-      { status: 429 }
-    )
-  }
-
-  // Process webhook...
-}
-```
-
----
-
-## Webhooks (Receiving)
+If adding subscriptions or payments to your task app:
 
 ```typescript
 // app/api/webhooks/stripe/route.ts
@@ -268,13 +549,13 @@ export async function POST(req: Request) {
   switch (event.type) {
     case 'customer.subscription.created':
       const subscription = event.data.object
-      // Update database
+      // Update user subscription in database
       await updateSubscription(subscription)
       break
 
-    case 'invoice.payment_succeeded':
-      // Send invoice email
-      await sendInvoiceEmail(event.data.object)
+    case 'customer.subscription.deleted':
+      // Downgrade user to free plan
+      await handleSubscriptionCancellation(event.data.object)
       break
   }
 
@@ -286,6 +567,10 @@ export async function POST(req: Request) {
 
 ## File Uploads (Supabase Storage)
 
+**⚠️ Advanced: Adding attachments to tasks**
+
+How to add file attachments to tasks:
+
 ```typescript
 // actions/upload-actions.ts
 'use server'
@@ -293,7 +578,7 @@ export async function POST(req: Request) {
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 
-export async function uploadFile(formData: FormData) {
+export async function uploadTaskAttachment(taskId: string, formData: FormData) {
   const supabase = await createClient()
   const file = formData.get('file') as File
 
@@ -313,9 +598,9 @@ export async function uploadFile(formData: FormData) {
   }
 
   // Upload to Supabase Storage
-  const fileName = `${Date.now()}-${file.name}`
+  const fileName = `${taskId}/${Date.now()}-${file.name}`
   const { data, error } = await supabase.storage
-    .from('uploads')
+    .from('task-attachments')
     .upload(fileName, file, {
       cacheControl: '3600',
       upsert: false
@@ -327,16 +612,27 @@ export async function uploadFile(formData: FormData) {
 
   // Get public URL
   const { data: { publicUrl } } = supabase.storage
-    .from('uploads')
+    .from('task-attachments')
     .getPublicUrl(fileName)
 
+  // Update task with attachment URL
+  await supabase
+    .from('tasks')
+    .update({ attachment_url: publicUrl })
+    .eq('id', taskId)
+
+  revalidatePath('/dashboard')
   return { success: true, url: publicUrl }
 }
 ```
 
 ---
 
-## Email (Resend + React Email)
+## Email Notifications (Resend + React Email)
+
+**⚠️ Advanced: Task reminders and notifications**
+
+How to add email notifications for tasks:
 
 ```typescript
 // lib/email/client.ts
@@ -344,37 +640,35 @@ import { Resend } from 'resend'
 
 export const resend = new Resend(process.env.RESEND_API_KEY)
 
-// emails/invoice-created.tsx
+// emails/task-reminder.tsx
 import { Html, Button, Container, Heading, Text } from '@react-email/components'
 
-export function InvoiceCreatedEmail({ invoiceNumber, amount, dueDate }) {
+export function TaskReminderEmail({ taskTitle, taskId }) {
   return (
     <Html>
       <Container>
-        <Heading>New Invoice Created</Heading>
-        <Text>Invoice #{invoiceNumber} for ${amount}</Text>
-        <Text>Due: {dueDate}</Text>
-        <Button href={`https://app.example.com/invoices/${invoiceNumber}`}>
-          View Invoice
+        <Heading>Task Reminder</Heading>
+        <Text>Don't forget about: {taskTitle}</Text>
+        <Button href={`https://app.example.com/dashboard?task=${taskId}`}>
+          View Task
         </Button>
       </Container>
     </Html>
   )
 }
 
-// actions/invoice-actions.ts
+// actions/task-actions.ts (extended)
 import { resend } from '@/lib/email/client'
-import { InvoiceCreatedEmail } from '@/emails/invoice-created'
+import { TaskReminderEmail } from '@/emails/task-reminder'
 
-async function sendInvoiceEmail(invoice: Invoice) {
+async function sendTaskReminder(task: Task, userEmail: string) {
   await resend.emails.send({
     from: 'noreply@example.com',
-    to: invoice.customer_email,
-    subject: `Invoice #${invoice.number}`,
-    react: InvoiceCreatedEmail({
-      invoiceNumber: invoice.number,
-      amount: invoice.amount,
-      dueDate: invoice.due_date
+    to: userEmail,
+    subject: `Reminder: ${task.title}`,
+    react: TaskReminderEmail({
+      taskTitle: task.title,
+      taskId: task.id
     })
   })
 }
@@ -382,7 +676,46 @@ async function sendInvoiceEmail(invoice: Invoice) {
 
 ---
 
-## Feature Flags
+## Rate Limiting
+
+**⚠️ Advanced: Protect public endpoints**
+
+Protect your API routes and Server Actions from abuse:
+
+```typescript
+// lib/rate-limit.ts
+import { Ratelimit } from '@upstash/ratelimit'
+import { Redis } from '@upstash/redis'
+
+export const ratelimit = new Ratelimit({
+  redis: Redis.fromEnv(),
+  limiter: Ratelimit.slidingWindow(10, '10 s'),
+  analytics: true,
+})
+
+// app/api/webhooks/route.ts
+export async function POST(req: Request) {
+  const ip = req.headers.get('x-forwarded-for') ?? 'anonymous'
+  const { success } = await ratelimit.limit(ip)
+
+  if (!success) {
+    return Response.json(
+      { error: 'Too many requests' },
+      { status: 429 }
+    )
+  }
+
+  // Process request...
+}
+```
+
+---
+
+## Feature Flags (PostHog)
+
+**⚠️ Advanced: A/B testing and gradual rollouts**
+
+How to add feature flags to gradually roll out new task features:
 
 ```typescript
 // lib/feature-flags.ts
@@ -395,21 +728,21 @@ export async function isFeatureEnabled(
   return posthog.isFeatureEnabled(featureKey, userId)
 }
 
-// components/new-dashboard.tsx
+// components/task-list.tsx
 'use client'
 
-export function Dashboard({ userId }: { userId: string }) {
-  const [showNewDashboard, setShowNewDashboard] = useState(false)
+export function TaskList({ userId }: { userId: string }) {
+  const [showNewUI, setShowNewUI] = useState(false)
 
   useEffect(() => {
-    isFeatureEnabled('new-dashboard', userId).then(setShowNewDashboard)
+    isFeatureEnabled('new-task-ui', userId).then(setShowNewUI)
   }, [userId])
 
-  if (showNewDashboard) {
-    return <NewDashboard />
+  if (showNewUI) {
+    return <NewTaskList />
   }
 
-  return <OldDashboard />
+  return <OldTaskList />
 }
 ```
 
@@ -417,7 +750,7 @@ export function Dashboard({ userId }: { userId: string }) {
 
 ## Accessibility
 
-### Accessibility Requirements
+**⚠️ Universal: Apply to all apps**
 
 All features must meet WCAG 2.1 AA standards:
 
@@ -449,28 +782,28 @@ All features must meet WCAG 2.1 AA standards:
 // ✅ GOOD - Accessible button
 <button
   type="button"
-  aria-label="Close modal"
-  onClick={handleClose}
+  aria-label="Delete task"
+  onClick={handleDelete}
   className="focus:ring-2 focus:ring-blue-500"
 >
-  <XIcon className="h-5 w-5" aria-hidden="true" />
+  <TrashIcon className="h-5 w-5" aria-hidden="true" />
 </button>
 
 // ✅ GOOD - Accessible form
 <form>
-  <label htmlFor="email" className="block text-sm font-medium">
-    Email Address
+  <label htmlFor="title" className="block text-sm font-medium">
+    Task Title
   </label>
   <input
-    id="email"
-    name="email"
-    type="email"
+    id="title"
+    name="title"
+    type="text"
     aria-required="true"
     aria-invalid={!!error}
-    aria-describedby={error ? "email-error" : undefined}
+    aria-describedby={error ? "title-error" : undefined}
   />
   {error && (
-    <p id="email-error" role="alert" className="text-red-600">
+    <p id="title-error" role="alert" className="text-red-600">
       {error}
     </p>
   )}

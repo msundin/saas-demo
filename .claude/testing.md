@@ -440,21 +440,21 @@ In these cases, show RED output before implementation.
 
 ```typescript
 // Step 1: Write test FIRST
-describe("InvoiceService", () => {
-  it("validates amount is positive", async () => {
+describe("TaskService", () => {
+  it("validates title is required", async () => {
     await expect(
-      invoiceService.create(userId, { amount: -100 }),
-    ).rejects.toThrow("Amount must be positive");
+      taskService.create(userId, { title: '' }),
+    ).rejects.toThrow("Title is required");
   });
 });
 
 // Step 2: Run test (fails - method doesn't exist)
 
 // Step 3: Implement minimal code
-export class InvoiceService {
-  async create(userId: string, data: CreateInvoiceInput) {
-    if (data.amount <= 0) {
-      throw new Error("Amount must be positive");
+export class TaskService {
+  async create(userId: string, data: CreateTaskInput) {
+    if (!data.title || data.title.length === 0) {
+      throw new Error("Title is required");
     }
     // ... rest of implementation
   }
@@ -480,31 +480,27 @@ Test individual functions and services in isolation.
 **Example (Services):**
 
 ```typescript
-// __tests__/invoice.service.test.ts
+// __tests__/task.service.test.ts
 import { describe, it, expect, vi } from "vitest";
-import { invoiceService } from "../services/invoice.service";
+import { taskService } from "../services/task.service";
 
-describe("InvoiceService", () => {
-  it("generates unique invoice numbers", () => {
-    const num1 = invoiceService.generateInvoiceNumber();
-    const num2 = invoiceService.generateInvoiceNumber();
-    expect(num1).not.toBe(num2);
+describe("TaskService", () => {
+  it("creates task with defaults", () => {
+    const task = taskService.create(userId, { title: 'Test' });
+    expect(task.completed).toBe(false);
   });
 
-  it("validates amount is positive", async () => {
+  it("validates title is required", async () => {
     await expect(
-      invoiceService.create(userId, { amount: -100 }),
-    ).rejects.toThrow("Amount must be positive");
+      taskService.create(userId, { title: '' }),
+    ).rejects.toThrow("Title is required");
   });
 
-  it("sends notification after invoice creation", async () => {
-    const sendEmailSpy = vi.spyOn(invoiceService, "sendInvoiceNotification");
-
-    await invoiceService.create(userId, validInvoiceData);
-
-    expect(sendEmailSpy).toHaveBeenCalledOnce();
+  it("orders tasks by creation date", async () => {
+    const tasks = await taskService.getAll(userId);
+    expect(tasks[0].createdAt >= tasks[1].createdAt).toBe(true);
   });
-});
+})
 ```
 
 ---
@@ -523,41 +519,40 @@ Test how components work together (Server Actions, API routes).
 **Example (Server Actions):**
 
 ```typescript
-// __tests__/invoice-actions.test.ts
+// __tests__/task-actions.test.ts
 import { describe, it, expect } from "vitest";
-import { createInvoice } from "../actions/invoice-actions";
+import { createTask } from "../actions/task-actions";
 
-describe("createInvoice action", () => {
-  it("creates invoice successfully", async () => {
-    const result = await createInvoice({
-      customerId: "valid-uuid",
-      amount: 100,
-      dueDate: "2025-12-31T00:00:00Z",
+describe("createTask action", () => {
+  it("creates task successfully", async () => {
+    const result = await createTask({
+      title: "Buy groceries",
+      description: "Milk, eggs, bread",
     });
 
     expect(result.success).toBe(true);
     expect(result.data).toHaveProperty("id");
-    expect(result.data.amount).toBe(100);
+    expect(result.data.title).toBe("Buy groceries");
+    expect(result.data.completed).toBe(false);
   });
 
   it("returns error for invalid input", async () => {
-    const result = await createInvoice({
-      customerId: "invalid",
-      amount: -100,
-      dueDate: "invalid",
+    const result = await createTask({
+      title: "",
     });
 
     expect(result.success).toBe(false);
     expect(result.error).toBeDefined();
+    expect(result.error).toContain("Title is required");
   });
 
   it("requires authentication", async () => {
     // Mock unauthenticated state
-    vi.mock("@/lib/auth", () => ({
-      getCurrentUser: vi.fn().mockResolvedValue(null),
+    vi.mock("@/lib/auth/helpers", () => ({
+      requireAuth: vi.fn().mockRejectedValue(new Error("Unauthorized")),
     }));
 
-    const result = await createInvoice(validData);
+    const result = await createTask({ title: "Test" });
 
     expect(result.success).toBe(false);
     expect(result.error).toContain("Unauthorized");
@@ -582,71 +577,68 @@ Test React components (interaction, rendering, accessibility).
 **Example (Component Tests):**
 
 ```typescript
-// __tests__/InvoiceForm.test.tsx
+// __tests__/TaskForm.test.tsx
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
-import { InvoiceForm } from '../components/InvoiceForm'
+import { TaskForm } from '../components/TaskForm'
 import { describe, it, expect, vi } from 'vitest'
 
-describe('InvoiceForm', () => {
+describe('TaskForm', () => {
   it('renders form fields', () => {
-    render(<InvoiceForm />)
+    render(<TaskForm />)
 
-    expect(screen.getByLabelText('Amount')).toBeInTheDocument()
-    expect(screen.getByLabelText('Customer')).toBeInTheDocument()
-    expect(screen.getByLabelText('Due Date')).toBeInTheDocument()
+    expect(screen.getByLabelText('Title')).toBeInTheDocument()
+    expect(screen.getByLabelText('Description')).toBeInTheDocument()
   })
 
   it('validates required fields', async () => {
-    render(<InvoiceForm />)
+    render(<TaskForm />)
 
     // Submit without filling fields
-    fireEvent.click(screen.getByRole('button', { name: /submit/i }))
+    fireEvent.click(screen.getByRole('button', { name: /create/i }))
 
     await waitFor(() => {
-      expect(screen.getByText('Amount is required')).toBeInTheDocument()
+      expect(screen.getByText('Title is required')).toBeInTheDocument()
     })
   })
 
-  it('validates amount is positive', async () => {
-    render(<InvoiceForm />)
+  it('validates title length', async () => {
+    render(<TaskForm />)
 
-    const amountInput = screen.getByLabelText('Amount')
-    fireEvent.change(amountInput, { target: { value: '-100' } })
-    fireEvent.click(screen.getByRole('button', { name: /submit/i }))
+    const titleInput = screen.getByLabelText('Title')
+    fireEvent.change(titleInput, { target: { value: 'a'.repeat(201) } })
+    fireEvent.click(screen.getByRole('button', { name: /create/i }))
 
     await waitFor(() => {
-      expect(screen.getByText('Amount must be positive')).toBeInTheDocument()
+      expect(screen.getByText('Title must be less than 200 characters')).toBeInTheDocument()
     })
   })
 
   it('submits form with valid data', async () => {
     const onSubmit = vi.fn()
-    render(<InvoiceForm onSubmit={onSubmit} />)
+    render(<TaskForm onSubmit={onSubmit} />)
 
     // Fill out form
-    fireEvent.change(screen.getByLabelText('Amount'), { target: { value: '100' } })
-    fireEvent.change(screen.getByLabelText('Customer'), { target: { value: 'customer-id' } })
-    fireEvent.change(screen.getByLabelText('Due Date'), { target: { value: '2025-12-31' } })
+    fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Buy groceries' } })
+    fireEvent.change(screen.getByLabelText('Description'), { target: { value: 'Milk and eggs' } })
 
-    fireEvent.click(screen.getByRole('button', { name: /submit/i }))
+    fireEvent.click(screen.getByRole('button', { name: /create/i }))
 
     await waitFor(() => {
       expect(onSubmit).toHaveBeenCalledWith({
-        amount: 100,
-        customerId: 'customer-id',
-        dueDate: '2025-12-31'
+        title: 'Buy groceries',
+        description: 'Milk and eggs'
       })
     })
   })
 
   it('shows loading state during submission', async () => {
-    render(<InvoiceForm />)
+    render(<TaskForm />)
 
     // Fill and submit
-    fireEvent.change(screen.getByLabelText('Amount'), { target: { value: '100' } })
-    fireEvent.click(screen.getByRole('button', { name: /submit/i }))
+    fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Test' } })
+    fireEvent.click(screen.getByRole('button', { name: /create/i }))
 
-    expect(screen.getByRole('button', { name: /submitting/i })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /creating/i })).toBeDisabled()
   })
 })
 ```
@@ -667,10 +659,10 @@ Test complete user flows (with Playwright).
 **Example (E2E):**
 
 ```typescript
-// e2e/invoice-creation.spec.ts
+// e2e/task-creation.spec.ts
 import { test, expect } from "@playwright/test";
 
-test.describe("Invoice Creation Flow", () => {
+test.describe("Task Creation Flow", () => {
   test.beforeEach(async ({ page }) => {
     // Login
     await page.goto("/login");
@@ -681,34 +673,34 @@ test.describe("Invoice Creation Flow", () => {
     await expect(page).toHaveURL("/dashboard");
   });
 
-  test("creates invoice successfully", async ({ page }) => {
-    // Navigate to invoices
-    await page.goto("/dashboard/invoices");
-    await page.click("text=New Invoice");
+  test("creates task successfully", async ({ page }) => {
+    // Navigate to dashboard
+    await page.goto("/dashboard");
+    await page.click("text=New Task");
 
     // Fill out form
-    await page.fill('input[name="amount"]', "100");
-    await page.selectOption('select[name="customerId"]', "customer-1");
-    await page.fill('input[name="dueDate"]', "2025-12-31");
+    await page.fill('input[name="title"]', "Buy groceries");
+    await page.fill('textarea[name="description"]', "Milk and eggs");
 
     // Submit
-    await page.click('button:has-text("Create Invoice")');
+    await page.click('button:has-text("Create Task")');
 
     // Verify success
     await expect(
-      page.locator("text=Invoice created successfully"),
+      page.locator("text=Task created successfully"),
     ).toBeVisible();
-    await expect(page).toHaveURL(/\/dashboard\/invoices\/.*/);
+    await expect(page.locator("text=Buy groceries")).toBeVisible();
   });
 
   test("validates form fields", async ({ page }) => {
-    await page.goto("/dashboard/invoices/new");
+    await page.goto("/dashboard");
+    await page.click("text=New Task");
 
     // Try to submit empty form
-    await page.click('button:has-text("Create Invoice")');
+    await page.click('button:has-text("Create Task")');
 
     // Check for validation errors
-    await expect(page.locator("text=Amount is required")).toBeVisible();
+    await expect(page.locator("text=Title is required")).toBeVisible();
   });
 });
 ```
@@ -780,7 +772,7 @@ vi.mock("@/lib/supabase/server", () => ({
     from: vi.fn(() => ({
       select: vi.fn(() => ({
         eq: vi.fn(() => ({
-          single: vi.fn().mockResolvedValue({ data: mockInvoice }),
+          single: vi.fn().mockResolvedValue({ data: mockTask }),
         })),
       })),
     })),
@@ -803,7 +795,7 @@ pnpm test:watch
 pnpm test:coverage
 
 # Run specific test file
-pnpm test invoice.service.test.ts
+pnpm test task.service.test.ts
 
 # E2E tests
 pnpm test:e2e
@@ -817,19 +809,19 @@ pnpm test:e2e --headed
 ## Test Organization
 
 ```
-features/invoices/
+features/tasks/
 ├── __tests__/
-│   ├── invoice.service.test.ts      # Unit tests
-│   ├── invoice-actions.test.ts      # Integration tests
-│   ├── InvoiceForm.test.tsx         # Component tests
+│   ├── task.service.test.ts      # Unit tests
+│   ├── task-actions.test.ts      # Integration tests
+│   ├── TaskForm.test.tsx         # Component tests
 │   └── fixtures/
-│       └── invoices.ts               # Test data
+│       └── tasks.ts               # Test data
 ├── components/
-│   └── InvoiceForm.tsx
+│   └── TaskForm.tsx
 ├── actions/
-│   └── invoice-actions.ts
+│   └── task-actions.ts
 └── services/
-    └── invoice.service.ts
+    └── task.service.ts
 ```
 
 ---
@@ -861,7 +853,7 @@ it('increments counter when button clicked', () => {
 it("works", () => {});
 
 // ✅ GOOD
-it("creates invoice with valid data and sends email notification", () => {});
+it("creates task with valid data and sends notification", () => {});
 ```
 
 ### 3. Keep Tests Independent
@@ -891,16 +883,19 @@ it("rejects values exceeding limit", () => {});
 ### 5. Use Test Fixtures
 
 ```typescript
-// fixtures/invoices.ts
-export const mockInvoice = {
-  id: "invoice-1",
-  amount: 100,
-  customerId: "customer-1",
-  dueDate: "2025-12-31",
+// fixtures/tasks.ts
+export const mockTask = {
+  id: "task-1",
+  title: "Buy groceries",
+  description: "Milk and eggs",
+  completed: false,
+  userId: "user-1",
+  createdAt: "2025-01-01T00:00:00Z",
+  updatedAt: "2025-01-01T00:00:00Z",
 };
 
-export const createMockInvoice = (overrides = {}) => ({
-  ...mockInvoice,
+export const createMockTask = (overrides = {}) => ({
+  ...mockTask,
   ...overrides,
 });
 ```

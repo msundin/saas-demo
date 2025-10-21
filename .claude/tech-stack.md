@@ -19,7 +19,7 @@ export const experimental_ppr = true
 
 // ✅ use cache directive (replaces some React Query needs)
 'use cache'
-export async function getInvoices() {
+export async function getTasks() {
   // Cached at function level
 }
 
@@ -170,17 +170,17 @@ import { Inngest } from "inngest";
 
 export const inngest = new Inngest({ id: "my-app" });
 
-// lib/inngest/functions/send-invoice.ts
-export const sendInvoice = inngest.createFunction(
-  { id: "send-invoice" },
-  { event: "invoice.created" },
+// lib/inngest/functions/send-task-reminder.ts
+export const sendTaskReminder = inngest.createFunction(
+  { id: "send-task-reminder" },
+  { event: "task.due-soon" },
   async ({ event, step }) => {
-    const invoice = await step.run("fetch-invoice", async () => {
-      return fetchInvoice(event.data.invoiceId);
+    const task = await step.run("fetch-task", async () => {
+      return fetchTask(event.data.taskId);
     });
 
     await step.run("send-email", async () => {
-      return sendEmail(invoice);
+      return sendEmail(task);
     });
   },
 );
@@ -211,22 +211,22 @@ export const sendInvoice = inngest.createFunction(
 // ✅ Structured logging
 import { logger } from "@/lib/logger";
 
-logger.info("Invoice created", {
-  invoiceId: invoice.id,
+logger.info("Task created", {
+  taskId: task.id,
   userId: user.id,
-  amount: invoice.amount,
+  title: task.title,
 });
 
 // ✅ Error tracking with context
 Sentry.captureException(error, {
-  tags: { feature: "invoices" },
-  extra: { invoiceId },
+  tags: { feature: "tasks" },
+  extra: { taskId },
 });
 
 // ✅ Custom metrics
-analytics.track("Invoice Created", {
-  amount: invoice.amount,
-  currency: "USD",
+analytics.track("Task Created", {
+  taskId: task.id,
+  completed: task.completed,
 });
 ```
 

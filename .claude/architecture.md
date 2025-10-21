@@ -7,7 +7,7 @@ Organize by **features**, not technical layers. Each feature is self-contained.
 ```
 apps/my-saas/
 ├── features/
-│   ├── invoices/
+│   ├── tasks/              # Task management feature
 │   │   ├── components/      # UI components
 │   │   ├── hooks/           # Custom React hooks
 │   │   ├── actions/         # Server Actions
@@ -15,7 +15,7 @@ apps/my-saas/
 │   │   ├── types/           # TypeScript types
 │   │   ├── validations/     # Zod schemas
 │   │   └── __tests__/       # Feature tests
-│   └── customers/
+│   └── auth/               # Authentication feature (if separate)
 │       └── (same structure)
 ├── lib/
 │   ├── supabase/           # Database client
@@ -77,14 +77,14 @@ function getData(input: CreateUserInput): Promise<User> { }
 ### React Components
 ```typescript
 // ✅ SERVER COMPONENT (default)
-export default async function InvoicesPage() {
-  const invoices = await getInvoices()
-  return <InvoiceList invoices={invoices} />
+export default async function TasksPage() {
+  const tasks = await getTasks()
+  return <TaskList tasks={tasks} />
 }
 
 // ✅ CLIENT COMPONENT (when needed)
 'use client'
-export function InvoiceForm() {
+export function TaskForm() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   // ... interactive logic
 }
@@ -92,39 +92,37 @@ export function InvoiceForm() {
 
 ### Server Actions
 ```typescript
-// ✅ GOOD - actions/invoice-actions.ts
+// ✅ GOOD - actions/task-actions.ts
 'use server'
 
 import { z } from 'zod'
 import { revalidatePath } from 'next/cache'
 
-const createInvoiceSchema = z.object({
-  customerId: z.string().uuid(),
-  amount: z.number().positive(),
-  dueDate: z.string().datetime()
+const createTaskSchema = z.object({
+  title: z.string().min(1, 'Title is required'),
+  description: z.string().optional().nullable()
 })
 
-export async function createInvoice(input: unknown) {
+export async function createTask(input: unknown) {
   try {
     // 1. Validate input
-    const data = createInvoiceSchema.parse(input)
+    const data = createTaskSchema.parse(input)
 
     // 2. Check auth
-    const user = await getCurrentUser()
-    if (!user) throw new Error('Unauthorized')
+    const user = await requireAuth()
 
     // 3. Business logic
-    const invoice = await invoiceService.create(user.id, data)
+    const task = await taskService.create(user.id, data)
 
     // 4. Revalidate cache
-    revalidatePath('/dashboard/invoices')
+    revalidatePath('/dashboard')
 
-    return { success: true, data: invoice }
+    return { success: true, data: task }
   } catch (error) {
-    console.error('Create invoice error:', error)
+    console.error('Create task error:', error)
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Failed to create invoice'
+      error: error instanceof Error ? error.message : 'Failed to create task'
     }
   }
 }
@@ -132,62 +130,85 @@ export async function createInvoice(input: unknown) {
 
 ### Services (Business Logic)
 ```typescript
-// ✅ GOOD - services/invoice.service.ts
+// ✅ GOOD - services/task.service.ts
 
-import { supabase } from '@/lib/supabase/server'
+import { createClient } from '@/lib/supabase/server'
 
-export class InvoiceService {
-  async create(userId: string, data: CreateInvoiceInput) {
-    // Business logic here
-    const invoiceNumber = this.generateInvoiceNumber()
+export class TaskService {
+  async create(userId: string, data: CreateTaskInput) {
+    const supabase = await createClient()
 
-    const { data: invoice, error } = await supabase
-      .from('invoices')
+    const { data: task, error } = await supabase
+      .from('tasks')
       .insert({
         user_id: userId,
-        invoice_number: invoiceNumber,
-        ...data
+        title: data.title,
+        description: data.description || null,
+        completed: false
       })
       .select()
       .single()
 
     if (error) throw error
 
-    // Side effects (email, analytics, etc.)
-    await this.sendInvoiceNotification(invoice)
-
-    return invoice
+    return task
   }
 
-  private generateInvoiceNumber(): string {
-    // Complex logic isolated here
-    return `INV-${Date.now()}`
+  async toggle(taskId: string, userId: string) {
+    const supabase = await createClient()
+
+    // Get current task
+    const { data: current } = await supabase
+      .from('tasks')
+      .select('completed')
+      .eq('id', taskId)
+      .eq('user_id', userId)
+      .single()
+
+    // Toggle completion
+    const { data: task, error } = await supabase
+      .from('tasks')
+      .update({ completed: !current.completed })
+      .eq('id', taskId)
+      .eq('user_id', userId)
+      .select()
+      .single()
+
+    if (error) throw error
+
+    return task
   }
 }
 
-export const invoiceService = new InvoiceService()
+export const taskService = new TaskService()
 ```
 
 ### Validation (Zod)
 ```typescript
-// ✅ GOOD - validations/invoice.schema.ts
+// ✅ GOOD - validations/task.schema.ts
 
 import { z } from 'zod'
 
-export const createInvoiceSchema = z.object({
-  customerId: z.string().uuid('Invalid customer ID'),
-  amount: z.number()
-    .positive('Amount must be positive')
-    .max(1000000, 'Amount too large'),
-  dueDate: z.string().datetime(),
-  items: z.array(z.object({
-    description: z.string().min(1),
-    quantity: z.number().int().positive(),
-    price: z.number().positive()
-  })).min(1, 'At least one item required')
+export const createTaskSchema = z.object({
+  title: z
+    .string()
+    .min(1, 'Title is required')
+    .max(200, 'Title must be less than 200 characters'),
+  description: z
+    .string()
+    .max(1000, 'Description must be less than 1000 characters')
+    .optional()
+    .nullable(),
 })
 
-export type CreateInvoiceInput = z.infer<typeof createInvoiceSchema>
+export const updateTaskSchema = z.object({
+  title: z.string().min(1).optional(),
+  description: z.string().max(1000).optional().nullable(),
+  completed: z.boolean().optional(),
+})
+
+export type CreateTaskInput = z.infer<typeof createTaskSchema>
+export type UpdateTaskInput = z.infer<typeof updateTaskSchema>
 ```
 
 ---
@@ -203,7 +224,7 @@ import { createClient } from '@/lib/supabase/server'
 
 const supabase = await createClient()
 const { data } = await supabase
-  .from('invoices')
+  .from('tasks')
   .select('*')
   .eq('user_id', userId)
   .order('created_at', { ascending: false })
@@ -259,9 +280,9 @@ export async function GET() {
 ### Server Components by Default
 ```typescript
 // ✅ GOOD - Server Component (default)
-export default async function InvoicePage() {
-  const invoices = await getInvoices()
-  return <InvoiceList invoices={invoices} />
+export default async function TasksPage() {
+  const tasks = await getTasks()
+  return <TaskList tasks={tasks} />
 }
 
 // Only use 'use client' when necessary
@@ -289,7 +310,7 @@ export const dynamic = 'force-dynamic'
 
 // Next.js 15: use cache directive
 'use cache'
-export async function getInvoices() {
+export async function getTasks() {
   // Function-level caching
 }
 ```
@@ -316,8 +337,8 @@ import Image from 'next/image'
 ### Loading States
 ```typescript
 // Server Component with Suspense
-<Suspense fallback={<InvoiceListSkeleton />}>
-  <InvoiceList />
+<Suspense fallback={<TaskListSkeleton />}>
+  <TaskList />
 </Suspense>
 
 // Client Component with state
@@ -341,9 +362,10 @@ try {
 ### Form Handling
 ```typescript
 // With Server Actions (recommended)
-<form action={createInvoiceAction}>
-  <input name="amount" />
-  <button type="submit">Create</button>
+<form action={createTaskAction}>
+  <input name="title" />
+  <textarea name="description" />
+  <button type="submit">Create Task</button>
 </form>
 
 // With React Hook Form (complex forms)

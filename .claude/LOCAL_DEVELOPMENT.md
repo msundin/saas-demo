@@ -164,7 +164,7 @@ pnpm test:e2e --headed
 pnpm test:e2e --ui
 
 # Run specific test
-pnpm test:e2e invoice-creation.spec.ts
+pnpm test:e2e task-creation.spec.ts
 ```
 
 **What gets tested:**
