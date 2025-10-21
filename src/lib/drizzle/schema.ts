@@ -23,7 +23,7 @@ export const tasks = pgTable(
       .defaultNow()
       .notNull(),
   },
-  (table) => [
+  (_table) => [
     pgPolicy('Users can delete their own tasks', {
       as: 'permissive',
       for: 'delete',

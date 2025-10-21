@@ -99,7 +99,7 @@ describe('Task Server Actions', () => {
     })
 
     it('should return error for missing title', async () => {
-      const result = await createTask({} as any)
+      const result = await createTask({} as { title: string })
 
       expect(result.success).toBe(false)
       expect(result.error).toBeDefined()
