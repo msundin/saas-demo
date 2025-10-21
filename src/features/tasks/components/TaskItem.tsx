@@ -34,7 +34,7 @@ export function TaskItem({ task }: TaskItemProps) {
         setIsCompleted(previousState)
         setError(result.error)
       }
-    } catch (err) {
+    } catch {
       // Revert on error
       setIsCompleted(previousState)
       setError('An unexpected error occurred')
@@ -57,7 +57,7 @@ export function TaskItem({ task }: TaskItemProps) {
         setIsDeleting(false)
       }
       // If successful, the component will be removed by parent re-render
-    } catch (err) {
+    } catch {
       setError('An unexpected error occurred')
       setIsDeleting(false)
     }

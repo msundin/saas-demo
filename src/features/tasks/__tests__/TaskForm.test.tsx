@@ -106,9 +106,9 @@ describe('TaskForm', () => {
           title: 'Test Task',
           description: null,
           completed: false,
-          user_id: 'user-123',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
+          userId: 'user-123',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
         },
       })
 
@@ -137,9 +137,9 @@ describe('TaskForm', () => {
           title: 'Buy groceries',
           description: 'Milk and eggs',
           completed: false,
-          user_id: 'user-123',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
+          userId: 'user-123',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
         },
       })
 
@@ -169,9 +169,9 @@ describe('TaskForm', () => {
           title: 'Test Task',
           description: 'Test Description',
           completed: false,
-          user_id: 'user-123',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
+          userId: 'user-123',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
         },
       })
 
@@ -203,9 +203,9 @@ describe('TaskForm', () => {
           title: 'Test Task',
           description: null,
           completed: false,
-          user_id: 'user-123',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
+          userId: 'user-123',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
         },
       })
 
@@ -235,9 +235,9 @@ describe('TaskForm', () => {
                   title: 'Test',
                   description: null,
                   completed: false,
-                  user_id: 'user-123',
-                  created_at: new Date().toISOString(),
-                  updated_at: new Date().toISOString(),
+                  userId: 'user-123',
+                  createdAt: new Date().toISOString(),
+                  updatedAt: new Date().toISOString(),
                 },
               })
             }, 100)
@@ -277,9 +277,9 @@ describe('TaskForm', () => {
                   title: 'Test',
                   description: null,
                   completed: false,
-                  user_id: 'user-123',
-                  created_at: new Date().toISOString(),
-                  updated_at: new Date().toISOString(),
+                  userId: 'user-123',
+                  createdAt: new Date().toISOString(),
+                  updatedAt: new Date().toISOString(),
                 },
               })
             }, 100)
@@ -374,9 +374,9 @@ describe('TaskForm', () => {
           title: 'Test Task',
           description: null,
           completed: false,
-          user_id: 'user-123',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
+          userId: 'user-123',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
         },
       })
 
@@ -430,9 +430,9 @@ describe('TaskForm', () => {
           title: 'Test Task',
           description: null,
           completed: false,
-          user_id: 'user-123',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
+          userId: 'user-123',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
         },
       })
 

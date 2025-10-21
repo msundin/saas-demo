@@ -54,10 +54,12 @@ describe('Task Server Actions', () => {
       })
 
       expect(result.success).toBe(true)
-      expect(result.data).toBeDefined()
-      expect(result.data?.title).toBe('New Task')
-      expect(result.data?.description).toBe('Task description')
-      expect(result.data?.completed).toBe(false)
+      if (result.success) {
+        expect(result.data).toBeDefined()
+        expect(result.data.title).toBe('New Task')
+        expect(result.data.description).toBe('Task description')
+        expect(result.data.completed).toBe(false)
+      }
     })
 
     it('should create a task without description', async () => {
@@ -84,8 +86,10 @@ describe('Task Server Actions', () => {
       })
 
       expect(result.success).toBe(true)
-      expect(result.data?.title).toBe('Task without description')
-      expect(result.data?.description).toBeNull()
+      if (result.success) {
+        expect(result.data.title).toBe('Task without description')
+        expect(result.data.description).toBeNull()
+      }
     })
 
     it('should return error for invalid input', async () => {
@@ -94,15 +98,19 @@ describe('Task Server Actions', () => {
       })
 
       expect(result.success).toBe(false)
-      expect(result.error).toBeDefined()
-      expect(result.error).toContain('Title is required')
+      if (!result.success) {
+        expect(result.error).toBeDefined()
+        expect(result.error).toContain('Title is required')
+      }
     })
 
     it('should return error for missing title', async () => {
       const result = await createTask({} as { title: string })
 
       expect(result.success).toBe(false)
-      expect(result.error).toBeDefined()
+      if (!result.success) {
+        expect(result.error).toBeDefined()
+      }
     })
 
     it('should return error when not authenticated', async () => {
@@ -114,7 +122,9 @@ describe('Task Server Actions', () => {
       })
 
       expect(result.success).toBe(false)
-      expect(result.error).toContain('Unauthorized')
+      if (!result.success) {
+        expect(result.error).toContain('Unauthorized')
+      }
     })
   })
 
@@ -161,7 +171,9 @@ describe('Task Server Actions', () => {
 
       const result = await toggleTask('task-123')
       expect(result.success).toBe(true)
-      expect(result.data?.completed).toBe(true)
+      if (result.success) {
+        expect(result.data.completed).toBe(true)
+      }
     })
 
     it('should return error for non-existent task', async () => {
@@ -183,7 +195,9 @@ describe('Task Server Actions', () => {
       const result = await toggleTask('non-existent-id')
 
       expect(result.success).toBe(false)
-      expect(result.error).toBeDefined()
+      if (!result.success) {
+        expect(result.error).toBeDefined()
+      }
     })
 
     it('should return error when not authenticated', async () => {
@@ -193,7 +207,9 @@ describe('Task Server Actions', () => {
       const result = await toggleTask('some-id')
 
       expect(result.success).toBe(false)
-      expect(result.error).toContain('Unauthorized')
+      if (!result.success) {
+        expect(result.error).toContain('Unauthorized')
+      }
     })
   })
 
@@ -224,7 +240,9 @@ describe('Task Server Actions', () => {
 
       const result = await deleteTask('task-123')
       expect(result.success).toBe(false)
-      expect(result.error).toContain('Failed to delete task')
+      if (!result.success) {
+        expect(result.error).toContain('Failed to delete task')
+      }
     })
 
     it('should return error when not authenticated', async () => {
@@ -234,7 +252,9 @@ describe('Task Server Actions', () => {
       const result = await deleteTask('some-id')
 
       expect(result.success).toBe(false)
-      expect(result.error).toContain('Unauthorized')
+      if (!result.success) {
+        expect(result.error).toContain('Unauthorized')
+      }
     })
   })
 })

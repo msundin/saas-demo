@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { redirect } from 'next/navigation'
 import DashboardPage from '../page'
+import type { Task } from '@/lib/drizzle/schema'
 
 // Mock Next.js redirect
 vi.mock('next/navigation', () => ({
@@ -33,7 +34,7 @@ vi.mock('@/features/tasks/components/TaskForm', () => ({
 }))
 
 vi.mock('@/features/tasks/components/TaskList', () => ({
-  TaskList: ({ tasks }: { tasks: any[] }) => (
+  TaskList: ({ tasks }: { tasks: Task[] }) => (
     <div data-testid="task-list">
       Task List ({tasks.length} tasks)
     </div>
@@ -79,7 +80,7 @@ describe('DashboardPage', () => {
     // Server component - await the render
     try {
       await page
-    } catch (err) {
+    } catch {
       // Expected to throw due to redirect
     }
 

@@ -10,12 +10,20 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
+      include: [
+        'src/**/*.{ts,tsx}',
+      ],
       exclude: [
         'node_modules/',
+        '.next/',
         'vitest.setup.ts',
         '**/*.config.{ts,js}',
         '**/types/**',
         '**/*.d.ts',
+        '**/__tests__/**',
+        'src/app/**/page.tsx', // Page wrappers (just layout)
+        'src/app/**/layout.tsx', // Layout components
+        'src/middleware.ts', // Middleware (E2E tested)
       ],
     },
   },

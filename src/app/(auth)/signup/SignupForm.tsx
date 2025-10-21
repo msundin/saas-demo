@@ -72,7 +72,7 @@ export function SignupForm() {
       if (authData.user) {
         router.push('/dashboard')
       }
-    } catch (err) {
+    } catch {
       setError('An error occurred. Please try again.')
       setIsLoading(false)
     }

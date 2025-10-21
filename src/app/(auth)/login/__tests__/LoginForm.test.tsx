@@ -209,7 +209,7 @@ describe('LoginForm', () => {
   describe('Loading State', () => {
     it('should show loading state during login', async () => {
       const user = userEvent.setup()
-      let resolveLogin: any
+      let resolveLogin: (() => void) | undefined
       mockSignInWithPassword.mockImplementation(
         () =>
           new Promise((resolve) => {
@@ -239,7 +239,7 @@ describe('LoginForm', () => {
       })
 
       // Resolve the login
-      resolveLogin()
+      resolveLogin!()
 
       await waitFor(() => {
         expect(mockPush).toHaveBeenCalledWith('/dashboard')
@@ -248,7 +248,7 @@ describe('LoginForm', () => {
 
     it('should disable form fields during login', async () => {
       const user = userEvent.setup()
-      let resolveLogin: any
+      let resolveLogin: (() => void) | undefined
       mockSignInWithPassword.mockImplementation(
         () =>
           new Promise((resolve) => {
@@ -278,7 +278,7 @@ describe('LoginForm', () => {
       })
 
       // Resolve the login
-      resolveLogin()
+      resolveLogin!()
 
       await waitFor(() => {
         expect(mockPush).toHaveBeenCalledWith('/dashboard')

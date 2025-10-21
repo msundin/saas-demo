@@ -49,7 +49,7 @@ export function TaskForm({ onSuccess }: TaskFormProps) {
       } else {
         setError(result.error)
       }
-    } catch (err) {
+    } catch {
       setError('An unexpected error occurred')
     } finally {
       setIsSubmitting(false)

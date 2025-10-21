@@ -246,7 +246,7 @@ describe('SignupForm', () => {
   describe('Loading State', () => {
     it('should show loading state during signup', async () => {
       const user = userEvent.setup()
-      let resolveSignup: any
+      let resolveSignup: (() => void) | undefined
       mockSignUp.mockImplementation(
         () =>
           new Promise((resolve) => {
@@ -278,7 +278,7 @@ describe('SignupForm', () => {
         expect(screen.getByText(/creating account/i)).toBeInTheDocument()
       })
 
-      resolveSignup()
+      resolveSignup!()
 
       await waitFor(() => {
         expect(mockPush).toHaveBeenCalledWith('/dashboard')
@@ -287,7 +287,7 @@ describe('SignupForm', () => {
 
     it('should disable form fields during signup', async () => {
       const user = userEvent.setup()
-      let resolveSignup: any
+      let resolveSignup: (() => void) | undefined
       mockSignUp.mockImplementation(
         () =>
           new Promise((resolve) => {
@@ -319,7 +319,7 @@ describe('SignupForm', () => {
         expect(passwordInput).toBeDisabled()
       })
 
-      resolveSignup()
+      resolveSignup!()
 
       await waitFor(() => {
         expect(mockPush).toHaveBeenCalledWith('/dashboard')

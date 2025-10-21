@@ -20,9 +20,9 @@ describe('TaskItem', () => {
     title: 'Buy groceries',
     description: 'Milk and eggs',
     completed: false,
-    user_id: 'user-123',
-    created_at: new Date('2025-01-01').toISOString(),
-    updated_at: new Date('2025-01-01').toISOString(),
+    userId: 'user-123',
+    createdAt: new Date('2025-01-01').toISOString(),
+    updatedAt: new Date('2025-01-01').toISOString(),
   }
 
   const mockCompletedTask: Task = {
