@@ -222,6 +222,171 @@ pnpm type-check
 
 ---
 
+## Troubleshooting Colima + Supabase Issues
+
+### **Issue 1: Supabase Fails to Start with Colima**
+
+**Symptoms:**
+```
+Error response from daemon: error while creating mount source path
+'/Users/mattias/.colima/default/docker.sock': mkdir
+/Users/mattias/.colima/default/docker.sock: operation not supported
+```
+
+**Root Cause:**
+Colima using `virtiofs` mount type cannot properly mount `docker.sock` into containers. Supabase containers need to mount the Docker socket for logging and analytics.
+
+**Solution: Switch Colima to SSHFS Mount Type**
+
+```bash
+# 1. Stop and delete existing Colima instance
+colima stop
+colima delete  # Confirm with 'y'
+
+# 2. Recreate with sshfs mount type
+colima start --vm-type vz --mount-type sshfs --arch aarch64
+
+# 3. Verify mount type
+colima status | grep mountType
+# Should show: mountType: sshfs
+
+# 4. Try Supabase again
+pnpm supabase start
+```
+
+**Important:** This setting persists after reboot. After reboot, just run `colima start` (no flags needed).
+
+---
+
+### **Issue 2: Supabase Vector Container Unhealthy**
+
+**Symptoms:**
+```
+supabase_vector_template container is not ready: unhealthy
+ERROR: Listing currently running containers failed: Connection refused
+```
+
+**Root Cause:**
+The analytics/vector container tries to connect to Docker socket for log aggregation, which fails with Colima's socket mounting limitations.
+
+**Solution: Disable Analytics (Safe for Local Development)**
+
+```bash
+# Edit supabase/config.toml
+[analytics]
+enabled = false  # Change from true to false
+port = 54327
+
+# Restart Supabase
+pnpm supabase stop
+pnpm supabase start
+```
+
+**Why it's safe:** Analytics/vector is only for log aggregation in production. You don't need it for local development.
+
+---
+
+### **Issue 3: Missing Environment Variables**
+
+**Symptoms:**
+```
+Error: Your project's URL and Key are required to create a Supabase client!
+```
+
+**Root Cause:**
+Missing `.env.local` file with Supabase connection details.
+
+**Solution: Create .env.local**
+
+```bash
+# Create .env.local with local Supabase credentials
+cat > .env.local << 'EOF'
+# Supabase Local Development
+NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0
+DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres
+EOF
+
+# Restart Next.js
+# Press Ctrl+C to stop, then:
+pnpm dev
+```
+
+**Note:** These are default Supabase local keys (safe to commit for local development).
+
+---
+
+### **Complete Reset Procedure**
+
+If you still have issues after trying the above solutions:
+
+```bash
+# 1. Stop everything
+pnpm supabase stop
+colima stop
+
+# 2. Clean up Supabase volumes
+docker volume rm supabase_db_template supabase_storage_template supabase_config_template 2>/dev/null || true
+
+# 3. Remove Supabase state
+rm -rf supabase/.branches supabase/.temp
+
+# 4. Recreate Colima with correct mount type
+colima delete
+colima start --vm-type vz --mount-type sshfs --arch aarch64
+
+# 5. Update Supabase config
+# Edit supabase/config.toml:
+# [analytics]
+# enabled = false
+
+# 6. Start fresh
+pnpm supabase start
+pnpm dev
+```
+
+---
+
+### **Verification Checklist**
+
+After applying fixes, verify everything works:
+
+```bash
+# ✓ Colima is running with sshfs
+colima status | grep mountType
+# Expected: mountType: sshfs
+
+# ✓ Supabase started successfully
+pnpm supabase status
+# Expected: All services running
+
+# ✓ Next.js can connect
+curl http://localhost:3000
+# Expected: HTML response (not error)
+
+# ✓ Environment variables loaded
+# Check terminal output when running `pnpm dev`
+# Expected: "Environments: .env.local"
+```
+
+---
+
+### **Why This Happens**
+
+**Technical Details:**
+
+1. **VirtioFS Limitation:** VirtioFS mount type on macOS uses Apple's Virtualization Framework, which doesn't support mounting Unix domain sockets (like `docker.sock`) into containers the same way traditional Docker Desktop does.
+
+2. **SSHFS Workaround:** SSHFS mounts use SSH file transfer protocol, which handles socket files differently and works reliably with Supabase's container requirements.
+
+3. **Analytics Container:** Supabase's vector/analytics container needs Docker socket access to collect container logs. Since we don't need log analytics in local development, disabling it is safe and recommended.
+
+**References:**
+- [Colima Issue #997](https://github.com/abiosoft/colima/issues/997) - VirtioFS docker.sock mounting
+- Supabase CLI uses Docker-in-Docker patterns that require proper socket mounting
+
+---
+
 ## Database Operations
 
 ### **Making Schema Changes**
