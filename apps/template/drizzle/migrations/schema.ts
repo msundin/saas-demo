@@ -47,7 +47,3 @@ export const tasks = pgTable(
     }),
   ]
 )
-
-// Export TypeScript types for use in application code
-export type Task = typeof tasks.$inferSelect
-export type NewTask = typeof tasks.$inferInsert

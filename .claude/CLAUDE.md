@@ -12,6 +12,7 @@
 **Active Since:** October 19, 2025
 
 **What this means:**
+
 - ⚡ Streamlined **PROCESS** (no PRs, no issues, work on main)
 - ⚡ Fast iteration (commit and deploy frequently)
 - ✅ **SAME quality standards** (80%+ tests, TDD, security)
@@ -20,6 +21,7 @@
 - ✅ Auto-deploy on every push
 
 **Quality Non-Negotiables (Always Apply):**
+
 - ✅ TDD for critical paths (auth, payments, mutations)
 - ✅ 80%+ test coverage
 - ✅ All security checks (RLS, validation)
@@ -29,6 +31,7 @@
 **Philosophy:** Skip bureaucracy, NOT quality. Move fast with confidence.
 
 **Switch to Production Mode when:**
+
 - First paying customer acquired
 - Team member added
 - Need code review process
@@ -39,6 +42,7 @@
 
 This documentation is split into focused files for efficiency:
 
+- **[LOCAL_DEVELOPMENT.md](./LOCAL_DEVELOPMENT.md)** - How to run and test the app locally (START HERE!)
 - **[tech-stack.md](./tech-stack.md)** - Complete tech stack, tools, and services
 - **[architecture.md](./architecture.md)** - Architecture principles, patterns, and code standards
 - **[workflows.md](./workflows.md)** - Development workflows, git process, and CI/CD
@@ -74,17 +78,18 @@ pnpm dev --filter=template
 ```
 
 **Access:**
+
 - App: http://localhost:3000
 - Supabase Studio: http://localhost:54323
 
 **Troubleshooting:**
 
-| Issue | Solution |
-|-------|----------|
-| Port 3000 in use | Change port: `"dev": "next dev -p 3001"` in package.json |
-| Supabase connection error | Verify DATABASE_URL and SUPABASE_URL in .env.local |
-| TypeScript errors | Run `pnpm type-check` for details |
-| Module not found | `rm -rf .next node_modules && pnpm install` |
+| Issue                     | Solution                                                 |
+| ------------------------- | -------------------------------------------------------- |
+| Port 3000 in use          | Change port: `"dev": "next dev -p 3001"` in package.json |
+| Supabase connection error | Verify DATABASE_URL and SUPABASE_URL in .env.local       |
+| TypeScript errors         | Run `pnpm type-check` for details                        |
+| Module not found          | `rm -rf .next node_modules && pnpm install`              |
 
 ---
 
@@ -122,10 +127,17 @@ pnpm drizzle-kit push             # Quick push (solo dev)
 6. **Run validation** before committing
 7. **Proactively suggest improvements** - Challenge patterns, propose better approaches
 8. **Security first** - Always check auth before using Drizzle
+9. **TDD Execution - MANDATORY:**
+   - After writing test: Run `pnpm test` → Show RED output
+   - After implementing: Run `pnpm test` → Show GREEN output
+   - Include test results in EVERY response during TDD
+   - NEVER implement without showing failed test first
+   - See [testing.md](./testing.md) for detailed TDD checklist
 
 ### 🎯 Your Mission: Maximum Efficiency & Correctness
 
 **Actively suggest improvements to:**
+
 - **Process:** Better workflows, faster feedback loops
 - **Architecture:** Simpler patterns, better separation
 - **Tech Stack:** Better libraries, new tools
@@ -133,6 +145,7 @@ pnpm drizzle-kit push             # Quick push (solo dev)
 - **DX:** Better developer experience, clearer docs
 
 **When you spot:**
+
 - 🔴 Patterns that cause bugs → Suggest safer alternatives
 - 🐌 Slow workflows → Propose faster approaches
 - 🤔 Confusing architecture → Recommend simplifications
@@ -140,6 +153,7 @@ pnpm drizzle-kit push             # Quick push (solo dev)
 - ⚠️ Technical debt → Flag it and suggest when/how to address
 
 **Philosophy:**
+
 - **Speak up early** - Don't wait until it's a problem
 - **Be specific** - "Use X instead of Y because..." with examples
 - **Balance trade-offs** - Explain pros/cons, let user decide
@@ -152,6 +166,7 @@ This is a living codebase. Your insights make it better. 🚀
 ## Success Metrics
 
 ### Code Quality
+
 - ✅ All tests passing
 - ✅ 80%+ test coverage
 - ✅ Zero ESLint errors
@@ -159,18 +174,21 @@ This is a living codebase. Your insights make it better. 🚀
 - ✅ No RLS bypasses without explicit auth checks
 
 ### Performance
+
 - ✅ Fast build times (<2 min with Turborepo cache)
 - ✅ Lighthouse score >90
 - ✅ Core Web Vitals: Good (LCP <2.5s, FID <100ms, CLS <0.1)
 - ✅ Time to First Byte (TTFB) <600ms
 
 ### Accessibility
+
 - ✅ WCAG 2.1 AA compliance
 - ✅ Keyboard navigation working
 - ✅ Screen reader tested
 - ✅ 4.5:1 color contrast minimum
 
 ### Security
+
 - ✅ All RLS policies tested
 - ✅ No secrets in client-side code
 - ✅ Rate limiting on public endpoints

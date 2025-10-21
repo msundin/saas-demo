@@ -12,26 +12,24 @@ CREATE TABLE "tasks" (
 -- Enable Row Level Security
 ALTER TABLE "tasks" ENABLE ROW LEVEL SECURITY;
 
--- Users can view only their own tasks
+-- RLS Policies: Users can only access their own tasks
+
 CREATE POLICY "Users can view their own tasks"
   ON "tasks"
   FOR SELECT
   USING (auth.uid() = user_id);
 
--- Users can create tasks for themselves
 CREATE POLICY "Users can create their own tasks"
   ON "tasks"
   FOR INSERT
   WITH CHECK (auth.uid() = user_id);
 
--- Users can update only their own tasks
 CREATE POLICY "Users can update their own tasks"
   ON "tasks"
   FOR UPDATE
   USING (auth.uid() = user_id)
   WITH CHECK (auth.uid() = user_id);
 
--- Users can delete only their own tasks
 CREATE POLICY "Users can delete their own tasks"
   ON "tasks"
   FOR DELETE
