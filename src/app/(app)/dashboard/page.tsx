@@ -3,6 +3,7 @@ import { requireAuth } from '@/lib/auth/helpers'
 import { taskService } from '@/features/tasks/services/task.service'
 import { TaskForm } from '@/features/tasks/components/TaskForm'
 import { TaskList } from '@/features/tasks/components/TaskList'
+import { LogoutButton } from '@/features/auth/components/LogoutButton'
 
 export default async function DashboardPage() {
   // Require authentication
@@ -15,11 +16,14 @@ export default async function DashboardPage() {
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-4xl">
-      <header className="mb-8">
-        <h1 className="text-4xl font-bold mb-2">Dashboard</h1>
-        <p className="text-muted-foreground">
-          Welcome back! Manage your tasks below.
-        </p>
+      <header className="mb-8 flex items-center justify-between">
+        <div>
+          <h1 className="text-4xl font-bold mb-2">Dashboard</h1>
+          <p className="text-muted-foreground">
+            Welcome back! Manage your tasks below.
+          </p>
+        </div>
+        <LogoutButton />
       </header>
 
       <div className="space-y-8">
