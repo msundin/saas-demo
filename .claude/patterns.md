@@ -227,6 +227,313 @@ export type NewTask = typeof tasks.$inferInsert
 
 ---
 
+## Frontend Patterns
+
+### Authentication UI Pattern
+
+**Files:** `src/app/(auth)/login/LoginForm.tsx`, `src/app/(auth)/signup/SignupForm.tsx`
+
+Client components for authentication with Supabase. Common pattern:
+
+```typescript
+'use client'
+
+import { useRouter } from 'next/navigation'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { createClient } from '@/lib/supabase/client'
+
+export function LoginForm() {
+  const router = useRouter()
+  const [error, setError] = useState<string | null>(null)
+
+  const form = useForm<LoginInput>({
+    resolver: zodResolver(loginSchema),
+    defaultValues: { email: '', password: '' }
+  })
+
+  async function onSubmit(data: LoginInput) {
+    const supabase = createClient()
+    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+      email: data.email,
+      password: data.password,
+    })
+
+    if (authError) {
+      setError(authError.message)
+      return
+    }
+
+    if (authData.user) {
+      router.push('/dashboard')
+    }
+  }
+
+  return (
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(onSubmit)}>
+        {/* FormField components */}
+        {error && <div role="alert">{error}</div>}
+        <Button type="submit" disabled={isLoading}>
+          {isLoading ? 'Logging in...' : 'Log In'}
+        </Button>
+      </form>
+    </Form>
+  )
+}
+```
+
+**Key points:**
+- Client component (`'use client'`)
+- `react-hook-form` for form state
+- `zodResolver` for validation
+- Supabase client-side auth
+- Error state management
+- Loading state for UX
+- ARIA labels for accessibility
+
+---
+
+### Form Handling Pattern
+
+**File:** `src/features/tasks/components/TaskForm.tsx`
+
+Forms that trigger Server Actions follow this pattern:
+
+```typescript
+'use client'
+
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { createTask } from '../actions/task-actions'
+
+export function TaskForm({ onSuccess }: TaskFormProps) {
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  const form = useForm<CreateTaskInput>({
+    resolver: zodResolver(createTaskSchema),
+    defaultValues: { title: '', description: '' }
+  })
+
+  async function onSubmit(data: CreateTaskInput) {
+    setIsSubmitting(true)
+
+    const result = await createTask(data)
+
+    if (result.success) {
+      form.reset()
+      onSuccess?.()
+    } else {
+      form.setError('root', { message: result.error })
+    }
+
+    setIsSubmitting(false)
+  }
+
+  return (
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(onSubmit)}>
+        <FormField
+          control={form.control}
+          name="title"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Title</FormLabel>
+              <FormControl>
+                <Input {...field} disabled={isSubmitting} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <Button type="submit" disabled={isSubmitting}>
+          {isSubmitting ? 'Creating...' : 'Create Task'}
+        </Button>
+      </form>
+    </Form>
+  )
+}
+```
+
+**Pattern:**
+1. Client component with `useForm` hook
+2. Zod schema validation via `zodResolver`
+3. Call Server Action on submit
+4. Handle success/error from ActionResponse
+5. Reset form on success
+6. Disable inputs during submission
+7. Show loading state in button
+
+---
+
+### Optimistic UI Updates Pattern
+
+**File:** `src/features/tasks/components/TaskItem.tsx`
+
+Immediate UI feedback before server confirmation:
+
+```typescript
+'use client'
+
+import { useState, useTransition } from 'react'
+import { toggleTask } from '../actions/task-actions'
+
+export function TaskItem({ task }: TaskItemProps) {
+  const [isPending, startTransition] = useTransition()
+  const [isCompleted, setIsCompleted] = useState(task.completed)
+
+  async function handleToggle() {
+    // 1. Optimistic update - immediate UI feedback
+    const previousState = isCompleted
+    setIsCompleted(!isCompleted)
+
+    // 2. Server action
+    startTransition(async () => {
+      const result = await toggleTask(task.id)
+
+      // 3. Revert on error
+      if (!result.success) {
+        setIsCompleted(previousState)
+        // Show error toast
+      }
+    })
+  }
+
+  return (
+    <div>
+      <input
+        type="checkbox"
+        checked={isCompleted}
+        onChange={handleToggle}
+        disabled={isPending}
+      />
+      <span className={isCompleted ? 'line-through' : ''}>
+        {task.title}
+      </span>
+    </div>
+  )
+}
+```
+
+**Benefits:**
+- Instant UI feedback (no waiting)
+- Automatic revert on error
+- Loading state via `useTransition`
+- Better perceived performance
+
+---
+
+### Server Component Data Fetching Pattern
+
+**File:** `src/app/(app)/dashboard/page.tsx`
+
+Server Components fetch data directly without client-side loading states:
+
+```typescript
+import { redirect } from 'next/navigation'
+import { requireAuth } from '@/lib/auth/helpers'
+import { taskService } from '@/features/tasks/services/task.service'
+
+export default async function DashboardPage() {
+  // 1. Require authentication
+  const user = await requireAuth().catch(() => {
+    redirect('/login')
+  })
+
+  // 2. Fetch data (runs on server)
+  const tasks = await taskService.getAll(user.id)
+
+  // 3. Render with data (no loading state needed)
+  return (
+    <div>
+      <h1>Dashboard</h1>
+      <TaskForm />
+      <TaskList tasks={tasks} />
+    </div>
+  )
+}
+```
+
+**Advantages:**
+- No loading spinners needed
+- Data fetched on server (faster, more secure)
+- Automatic error boundaries
+- SEO-friendly (data in initial HTML)
+- Streaming support built-in
+
+---
+
+### Route Protection Pattern (Middleware)
+
+**File:** `src/middleware.ts`
+
+Protect routes and manage auth flow at the edge:
+
+```typescript
+import { createServerClient } from '@supabase/ssr'
+import { NextResponse, type NextRequest } from 'next/server'
+
+export async function middleware(request: NextRequest) {
+  let supabaseResponse = NextResponse.next({ request })
+
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() { return request.cookies.getAll() },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value }) =>
+            request.cookies.set(name, value)
+          )
+          supabaseResponse = NextResponse.next({ request })
+          cookiesToSet.forEach(({ name, value, options }) =>
+            supabaseResponse.cookies.set(name, value, options)
+          )
+        },
+      },
+    }
+  )
+
+  // Refresh session
+  const { data: { user } } = await supabase.auth.getUser()
+
+  // Protected routes
+  if (request.nextUrl.pathname.startsWith('/dashboard')) {
+    if (!user) {
+      return NextResponse.redirect(new URL('/login', request.url))
+    }
+  }
+
+  // Auth pages - redirect if already logged in
+  if (
+    request.nextUrl.pathname.startsWith('/login') ||
+    request.nextUrl.pathname.startsWith('/signup')
+  ) {
+    if (user) {
+      return NextResponse.redirect(new URL('/dashboard', request.url))
+    }
+  }
+
+  return supabaseResponse
+}
+
+export const config = {
+  matcher: [
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+  ],
+}
+```
+
+**Features:**
+- Runs before page renders (instant redirects)
+- Refreshes Supabase session automatically
+- Protects dashboard routes
+- Redirects authenticated users from auth pages
+- Excludes static assets from processing
+
+---
+
 # PART 2: Advanced Patterns (Beyond Template)
 
 These patterns are NOT implemented in the template but show how to extend it for production SaaS applications.
