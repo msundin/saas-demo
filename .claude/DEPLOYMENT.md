@@ -9,15 +9,16 @@
 ## Table of Contents
 
 1. [Overview](#overview)
-2. [Architecture](#architecture)
-3. [Prerequisites](#prerequisites)
-4. [Phase 1: Bootstrap Setup](#phase-1-bootstrap-setup)
-5. [Phase 2: Production Migration](#phase-2-production-migration)
-6. [Environment Configuration](#environment-configuration)
-7. [OAuth Setup](#oauth-setup)
-8. [Backup Strategy](#backup-strategy)
-9. [Troubleshooting](#troubleshooting)
-10. [Cost Analysis](#cost-analysis)
+2. [Repository Strategy](#repository-strategy)
+3. [Architecture](#architecture)
+4. [Prerequisites](#prerequisites)
+5. [Phase 1: Bootstrap Setup](#phase-1-bootstrap-setup)
+6. [Phase 2: Production Migration](#phase-2-production-migration)
+7. [Environment Configuration](#environment-configuration)
+8. [OAuth Setup](#oauth-setup)
+9. [Backup Strategy](#backup-strategy)
+10. [Troubleshooting](#troubleshooting)
+11. [Cost Analysis](#cost-analysis)
 
 ---
 
@@ -36,6 +37,84 @@ This deployment strategy allows you to:
 **Production Phase:** Pay only for successful apps that have real users/revenue.
 
 This approach saves **$400-900/month** compared to cloud-only hosting during the validation phase.
+
+---
+
+## Repository Strategy
+
+This template uses a **three-tier repository approach** to optimize for different deployment scenarios:
+
+### 1. **saas-template** (This Repository)
+
+**Purpose:** Source code template for cloning
+**Deployment:** Local development only (optional: deploy to saas-template.infswsol.com)
+**Backend:** Supabase Local (Docker)
+
+**Use for:**
+- ✅ Feature development and testing
+- ✅ Source of truth for all new apps
+- ✅ Creating new production apps by cloning
+
+**Deployment strategy:**
+- Keep as local-only development environment
+- OR optionally deploy to saas-template.infswsol.com with TrueNAS backend for remote testing
+
+### 2. **saas-demo** (Separate Repository - Cloud Deployment)
+
+**Purpose:** Cloud deployment validation + reliable customer demos
+**Deployment:** Vercel Free + Supabase Cloud Free (Project #1 of 2)
+**Domain:** demo.infswsol.com
+
+**Why separate from template:**
+- ✅ **Validates cloud deployment early** - Test Vercel + Supabase Cloud integration before production
+- ✅ **Tests template cloning workflow** - Prove the "clone → deploy" process works
+- ✅ **Always-available demo** - Show customers even if TrueNAS is down
+- ✅ **Professional perception** - Cloud-hosted = enterprise credibility
+- ✅ **Uses 1 of 2 free Supabase projects** - Intelligent free tier usage
+
+**Workflow:**
+```bash
+# Clone template to create demo
+git clone https://github.com/msundin/saas-template saas-demo
+cd saas-demo
+# Update package.json, deploy to Vercel + Supabase Cloud
+```
+
+### 3. **Production Apps** (app1, app2, ..., app20)
+
+**Purpose:** Real SaaS applications testing product-market fit
+**Initial Deployment:** Vercel Free + TrueNAS Supabase ($0/month)
+**Domains:** app1.novatratech.com, app2.novatratech.com, etc.
+
+**Bootstrap Phase (0-100 users):**
+- Frontend: Vercel Free (global CDN)
+- Backend: TrueNAS Supabase (unlimited apps, $0 cost)
+- Test product-market fit without financial pressure
+
+**Production Phase (100+ users OR paying customers):**
+- Migrate to Supabase Cloud Free (Project #2)
+- When 500MB exceeded → Supabase Cloud Paid ($25/month)
+- When traffic high → Vercel Pro ($20/month)
+- **Only pay when app is successful**
+
+**Workflow:**
+```bash
+# Clone template for new production app
+git clone https://github.com/msundin/saas-template app1
+cd app1
+# Deploy to Vercel Free + TrueNAS Supabase
+# Iterate until successful
+# Migrate to cloud only when needed
+```
+
+### Summary Table
+
+| Repository | Purpose | Frontend | Backend | Domain | Cost |
+|------------|---------|----------|---------|--------|------|
+| **saas-template** | Source template | Local dev | Supabase Local | localhost:3000 | $0 |
+| **saas-demo** | Cloud validation | Vercel Free | Supabase Cloud | demo.infswsol.com | $0 |
+| **app1-20** (bootstrap) | Product testing | Vercel Free | TrueNAS | app{N}.novatratech.com | $0 |
+| **app1** (successful) | Production | Vercel Pro | Supabase Cloud | app1.novatratech.com | $45/mo |
 
 ---
 
@@ -60,7 +139,7 @@ This approach saves **$400-900/month** compared to cloud-only hosting during the
 ├─────────────────────────────────────────────────────────────┤
 │ Frontend: Vercel Free Tier                                   │
 │   • demo.infswsol.com                                        │
-│   • template.infswsol.com                                    │
+│   • saas-template.infswsol.com                               │
 │   • app1-20.novatratech.com                                  │
 │   • Global CDN, automatic HTTPS                              │
 │   • Unlimited deployments                                    │
@@ -96,46 +175,49 @@ This approach saves **$400-900/month** compared to cloud-only hosting during the
 ### Network Topology
 
 ```
-┌──────────────┐
-│  Internet    │
-└──────┬───────┘
-       │
-       ├──────────────> Vercel Edge Network (Frontend)
-       │                • demo.infswsol.com
-       │                • template.infswsol.com
-       │                • app1.novatratech.com
-       │
-       │                API Requests
-       ↓
-┌──────────────────────────────────────────┐
-│  Your Home Network                        │
-│  ┌────────────────────────────────────┐  │
-│  │ TrueNAS SCALE                       │  │
-│  │                                     │  │
-│  │ ┌─────────────────────────────┐    │  │
-│  │ │ Docker Compose Stack #1     │    │  │
-│  │ │  • Supabase (demo)          │    │  │
-│  │ │    - PostgreSQL             │    │  │
-│  │ │    - Auth                   │    │  │
-│  │ │    - Storage                │    │  │
-│  │ │    - Realtime               │    │  │
-│  │ └─────────────────────────────┘    │  │
-│  │                                     │  │
-│  │ ┌─────────────────────────────┐    │  │
-│  │ │ Docker Compose Stack #2     │    │  │
-│  │ │  • Supabase (template)      │    │  │
-│  │ └─────────────────────────────┘    │  │
-│  │                                     │  │
-│  │ ┌─────────────────────────────┐    │  │
-│  │ │ Docker Compose Stack #3-20  │    │  │
-│  │ │  • Supabase (app1-18)       │    │  │
-│  │ └─────────────────────────────┘    │  │
-│  └────────────────────────────────────┘  │
-│                                           │
-│  Exposed via:                             │
-│  • Cloudflare Tunnel (recommended), OR    │
-│  • DDNS + Port Forwarding                 │
-└───────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────┐
+│                        Internet                           │
+└──────┬──────────────────────────────────┬────────────────┘
+       │                                  │
+       │                                  │
+       ├─> Vercel (Frontend)              ├─> Supabase Cloud
+       │   • demo.infswsol.com   ─────────┤   • demo.infswsol.com backend
+       │   • saas-template.infswsol.com    │   • Managed PostgreSQL
+       │   • app1-20.novatratech.com       │   • Global availability
+       │                                   │   • Free Project #1
+       │                                   │
+       │   API Requests (app1-20)          │
+       │   ↓                               │
+       │                                   │
+┌──────┴───────────────────────────────────┴───────────────┐
+│  Your Home Network                                        │
+│  ┌────────────────────────────────────────────────────┐  │
+│  │ TrueNAS SCALE                                       │  │
+│  │                                                     │  │
+│  │ ┌─────────────────────────────────┐                │  │
+│  │ │ Docker Compose Stack #1         │                │  │
+│  │ │  • Supabase (template) OPTIONAL │                │  │
+│  │ │    - PostgreSQL                 │                │  │
+│  │ │    - Auth, Storage, Realtime    │                │  │
+│  │ └─────────────────────────────────┘                │  │
+│  │                                                     │  │
+│  │ ┌─────────────────────────────────┐                │  │
+│  │ │ Docker Compose Stack #2-20      │                │  │
+│  │ │  • Supabase (app1-19)           │                │  │
+│  │ │    - One instance per app       │                │  │
+│  │ │    - Full isolation             │                │  │
+│  │ └─────────────────────────────────┘                │  │
+│  └────────────────────────────────────────────────────┘  │
+│                                                           │
+│  Exposed via:                                             │
+│  • Cloudflare Tunnel (recommended), OR                    │
+│  • DDNS + Port Forwarding + Caddy                         │
+└───────────────────────────────────────────────────────────┘
+
+Legend:
+  demo.infswsol.com          → Supabase Cloud (validates cloud deployment)
+  saas-template.infswsol.com → TrueNAS (optional, for remote testing)
+  app1-20                    → TrueNAS (bootstrap phase, $0/month)
 ```
 
 ---
@@ -168,13 +250,22 @@ This approach saves **$400-900/month** compared to cloud-only hosting during the
 
 ### Accounts Needed
 
-- ✅ Vercel account (free tier)
+- ✅ Vercel account (free tier) - for all deployments
+- ✅ Supabase Cloud account (free tier) - for saas-demo deployment
 - ✅ GitHub account (for OAuth and deployment)
 - ✅ Cloudflare account (optional but recommended for tunnel)
 
 ---
 
 ## Phase 1: Bootstrap Setup
+
+**NOTE:** This phase is for setting up TrueNAS Supabase instances for:
+- ✅ **Production apps** (app1-20.novatratech.com) - Bootstrap phase
+- ✅ **Template** (saas-template.infswsol.com) - OPTIONAL remote testing
+
+**For saas-demo (demo.infswsol.com):** Skip Phase 1. Use Supabase Cloud instead (see [saas-demo Deployment Guide](#saas-demo-deployment-guide) below).
+
+---
 
 ### Step 1: TrueNAS - Install Supabase
 
@@ -343,7 +434,7 @@ ingress:
     service: http://localhost:8000
 
   # Template Supabase API
-  - hostname: template-api.infswsol.com
+  - hostname: saas-template-api.infswsol.com
     service: http://localhost:8001
 
   # App1 Supabase API
@@ -368,7 +459,7 @@ sudo systemctl status cloudflared
 
 Your Supabase instances are now accessible:
 - `https://demo-api.infswsol.com` → TrueNAS port 8000
-- `https://template-api.infswsol.com` → TrueNAS port 8001
+- `https://saas-template-api.infswsol.com` → TrueNAS port 8001
 - `https://app1-api.novatratech.com` → TrueNAS port 8002
 
 #### Option B: DDNS + Port Forwarding (Alternative)
@@ -433,7 +524,7 @@ demo-api.your-domain.duckdns.org {
     reverse_proxy localhost:8000
 }
 
-template-api.your-domain.duckdns.org {
+saas-template-api.your-domain.duckdns.org {
     reverse_proxy localhost:8001
 }
 
@@ -506,12 +597,12 @@ NODE_ENV=production
 NEXT_PUBLIC_ROBOTS=noindex
 ```
 
-**For template.infswsol.com:**
+**For saas-template.infswsol.com:**
 
 ```env
-NEXT_PUBLIC_SUPABASE_URL=https://template-api.infswsol.com
+NEXT_PUBLIC_SUPABASE_URL=https://saas-template-api.infswsol.com
 NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon-key-from-truenas-template-env>
-DATABASE_URL=postgresql://postgres:<password>@template-api.infswsol.com:5433/postgres
+DATABASE_URL=postgresql://postgres:<password>@saas-template-api.infswsol.com:5433/postgres
 NODE_ENV=production
 NEXT_PUBLIC_ROBOTS=noindex
 ```
@@ -533,7 +624,7 @@ NODE_ENV=production
 1. Go to Project → "Settings" → "Domains"
 2. Add custom domain:
    - demo.infswsol.com
-   - template.infswsol.com
+   - saas-template.infswsol.com
    - app1.novatratech.com
 
 3. Update DNS records in your domain provider:
@@ -586,7 +677,7 @@ DATABASE_URL=postgresql://postgres:<password>@demo-api.infswsol.com:5432/postgre
 
 Visit your deployed apps:
 - https://demo.infswsol.com
-- https://template.infswsol.com
+- https://saas-template.infswsol.com
 - https://app1.novatratech.com
 
 Verify:
@@ -710,6 +801,266 @@ rclone copy /mnt/pool1/backups/supabase backblaze:saas-backups/supabase
 
 # Add to backup script (already shown above)
 ```
+
+---
+
+## saas-demo Deployment Guide
+
+**Purpose:** Deploy the demo app to Vercel + Supabase Cloud to validate the cloud deployment process and maintain a reliable customer demo.
+
+### Why Deploy saas-demo First?
+
+Before deploying production apps to TrueNAS, deploy saas-demo to cloud to:
+1. ✅ **Validate the deployment workflow** - Test the full Vercel + Supabase integration
+2. ✅ **Create template cloning documentation** - Document the clone → deploy process
+3. ✅ **Ensure always-available demo** - Show customers without TrueNAS dependency
+4. ✅ **Test cloud features** - Verify auth, RLS, and all features work in cloud
+
+### Step 1: Clone Template Repository
+
+```bash
+# Clone saas-template to create saas-demo
+cd ~/projects
+git clone https://github.com/msundin/saas-template saas-demo
+cd saas-demo
+
+# Update package.json
+# Change "name": "saas-template" to "name": "saas-demo"
+
+# Create new GitHub repository
+gh repo create msundin/saas-demo --public --source=. --remote=origin
+
+# Push to new repository
+git push -u origin main
+```
+
+### Step 2: Create Supabase Cloud Project
+
+1. **Go to https://supabase.com/dashboard**
+2. **Click "New Project":**
+   - Organization: Select or create
+   - Name: `saas-demo`
+   - Database Password: Generate strong password (save it!)
+   - Region: Choose closest to your users (e.g., us-east-1)
+   - Plan: **Free** (500MB database, 50k MAU, 2GB bandwidth)
+
+3. **Wait ~2 minutes for provisioning**
+
+4. **Save credentials** (Project Settings → API):
+   ```
+   Project URL: https://abcdefgh.supabase.co
+   Anon/Public Key: eyJhbGci...
+   Service Role Key: eyJhbGci... (secret, never expose)
+   ```
+
+5. **Get Database URL** (Project Settings → Database → Connection String):
+   - Use **Transaction mode** (port 5432) for migrations:
+     ```
+     postgresql://postgres.[project-ref]:[password]@db.[project-ref].supabase.co:5432/postgres
+     ```
+   - Use **Session mode** (port 6543) for runtime queries:
+     ```
+     postgresql://postgres.[project-ref]:[password]@aws-0-region.pooler.supabase.com:6543/postgres
+     ```
+
+### Step 3: Run Migrations
+
+```bash
+# Link to your Supabase Cloud project
+pnpm supabase link --project-ref [your-project-ref]
+# Enter database password when prompted
+
+# Push migrations to Supabase Cloud (creates tables + RLS policies)
+pnpm supabase db push
+
+# Verify tables created
+# Go to Supabase Dashboard → Table Editor
+# Should see: tasks table with RLS policies enabled
+# Auth → Policies should show 4 policies (SELECT, INSERT, UPDATE, DELETE)
+```
+
+**Why this command:**
+- ✅ Applies SQL migrations from `supabase/migrations/` directory
+- ✅ Creates RLS policies (Drizzle cannot do this!)
+- ✅ Maintains Supabase as single source of truth
+- ✅ Ensures security policies are properly enforced
+
+**Optional: Generate Drizzle Schema (for complex server-side queries)**
+
+If you plan to use Drizzle for complex queries:
+
+```bash
+# After migrations are applied, generate Drizzle schema from database
+pnpm exec dotenv -e .env.local -- drizzle-kit introspect
+
+# Copy generated schema to project
+cp drizzle/migrations/schema.ts src/lib/drizzle/schema.ts
+
+# Now you can use Drizzle for type-safe complex queries
+# (Supabase client still used for simple queries with automatic RLS)
+```
+
+### Step 4: Deploy to Vercel
+
+```bash
+# Login to Vercel (if not already)
+vercel login
+
+# Deploy
+vercel
+
+# Follow prompts:
+# - Set up and deploy? Yes
+# - Scope: Your account/team
+# - Link to existing project? No
+# - Project name: saas-demo
+# - Directory: ./
+# - Override settings? No
+```
+
+### Step 5: Configure Environment Variables in Vercel
+
+**Via Vercel Dashboard:**
+
+1. Go to https://vercel.com/your-username/saas-demo
+2. Settings → Environment Variables
+3. Add these variables for **Production, Preview, and Development**:
+
+```env
+# Supabase Configuration (from Step 2)
+NEXT_PUBLIC_SUPABASE_URL=https://abcdefgh.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGci...
+
+# Database URL (Session mode for runtime)
+DATABASE_URL=postgresql://postgres.[project-ref]:[password]@aws-0-region.pooler.supabase.com:6543/postgres
+
+# App URL (will update after custom domain)
+NEXT_PUBLIC_APP_URL=https://saas-demo.vercel.app
+
+# SEO Protection (block search engines)
+NEXT_PUBLIC_ROBOTS=noindex
+```
+
+**Via Vercel CLI (alternative):**
+
+```bash
+# Add environment variables via CLI
+vercel env add NEXT_PUBLIC_SUPABASE_URL production
+# Paste value when prompted
+
+vercel env add NEXT_PUBLIC_SUPABASE_ANON_KEY production
+vercel env add DATABASE_URL production
+vercel env add NEXT_PUBLIC_APP_URL production
+vercel env add NEXT_PUBLIC_ROBOTS production
+
+# Repeat for preview and development environments if needed
+```
+
+### Step 6: Configure Custom Domain
+
+**In Vercel Dashboard:**
+
+1. Go to Project → Settings → Domains
+2. Add custom domain: `demo.infswsol.com`
+3. Vercel will show DNS records to add
+
+**In your DNS provider (e.g., Cloudflare, Namecheap):**
+
+Since `infswsol.com` apex is already pointing to your home server, you need to manually add the subdomain:
+
+```
+Type: CNAME
+Name: demo
+Target: cname.vercel-dns.com
+TTL: Auto (or 3600)
+```
+
+**Wait for DNS propagation** (usually 5-60 minutes)
+
+**Update environment variable:**
+```bash
+# Update NEXT_PUBLIC_APP_URL to custom domain
+vercel env rm NEXT_PUBLIC_APP_URL production
+vercel env add NEXT_PUBLIC_APP_URL production
+# Enter: https://demo.infswsol.com
+```
+
+**Redeploy to pick up new environment variable:**
+```bash
+vercel --prod
+```
+
+### Step 7: Add Demo Data
+
+```bash
+# Visit https://demo.infswsol.com
+# Sign up with a demo account:
+# Email: demo@example.com
+# Password: DemoPassword123!
+
+# Create sample tasks:
+# - "Welcome to the demo!"
+# - "Try creating a new task"
+# - "Toggle task completion"
+# - "Delete unwanted tasks"
+
+# This data will persist in Supabase Cloud
+```
+
+### Step 8: Verify Deployment
+
+**Checklist:**
+- ✅ Site accessible at https://demo.infswsol.com
+- ✅ SSL certificate valid (automatic via Vercel)
+- ✅ Can sign up new users
+- ✅ Can log in
+- ✅ Can create/update/delete tasks
+- ✅ RLS policies working (users only see their own tasks)
+- ✅ Logout works
+- ✅ robots.txt blocks search engines (visit /robots.txt)
+
+**Test with curl:**
+```bash
+# Test site is accessible
+curl -I https://demo.infswsol.com
+
+# Should return 200 OK with security headers
+
+# Test robots.txt
+curl https://demo.infswsol.com/robots.txt
+
+# Should show:
+# User-agent: *
+# Disallow: /
+```
+
+### Step 9: Document Learnings
+
+Create a deployment log to reference when deploying production apps:
+
+```bash
+# In saas-demo repository
+touch DEPLOYMENT_LOG.md
+```
+
+Document:
+- ✅ Any issues encountered during deployment
+- ✅ DNS configuration details
+- ✅ Environment variables that needed adjustment
+- ✅ Supabase Cloud setup steps
+- ✅ Migration commands that worked
+- ✅ Vercel configuration notes
+
+### Success Criteria
+
+- ✅ demo.infswsol.com accessible publicly
+- ✅ All features working (auth, tasks, logout)
+- ✅ Cloud deployment process validated
+- ✅ Template cloning workflow tested
+- ✅ Deployment documentation updated
+- ✅ Demo ready to show customers
+
+**Next:** Use this experience to deploy production apps to TrueNAS with confidence.
 
 ---
 
@@ -1009,7 +1360,7 @@ export function SignInWithGoogle() {
 1. Go to: https://github.com/settings/developers
 2. New OAuth App
 3. Application name: "SaaS Template"
-4. Homepage URL: `https://template.infswsol.com`
+4. Homepage URL: `https://saas-template.infswsol.com`
 5. Authorization callback URLs:
 
 ```
@@ -1554,7 +1905,7 @@ This hybrid bootstrap strategy gives you:
 
 **Support:**
 - GitHub Issues: https://github.com/your-org/saas-template/issues
-- Documentation: https://template.infswsol.com/docs
+- Documentation: https://saas-template.infswsol.com/docs
 - Community Discord: [Link]
 
 **Last Updated:** October 2025

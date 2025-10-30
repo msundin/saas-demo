@@ -69,6 +69,7 @@ These apply to **EVERY** feature:
 | 🗄️ Database schema changes | tech-stack.md (Schema Management Workflow)          |
 | 🧪 Writing tests           | testing.md                                          |
 | 📝 Making commits          | workflows.md                                        |
+| 🚀 Deploying apps          | DEPLOYMENT.md (Three-tier strategy)                 |
 | 🐛 Troubleshooting/setup   | LOCAL_DEVELOPMENT.md                                |
 | 📧 Sending emails          | patterns.md (Email Patterns)                        |
 | 💳 Payment integration     | patterns.md (Payment Patterns)                      |

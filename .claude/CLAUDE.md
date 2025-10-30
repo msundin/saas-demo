@@ -46,6 +46,7 @@ This documentation is split into focused files for efficiency:
 - **[tech-stack.md](./tech-stack.md)** - Complete tech stack, tools, and services
 - **[architecture.md](./architecture.md)** - Architecture principles, patterns, and code standards
 - **[workflows.md](./workflows.md)** - Development workflows, git process, and CI/CD
+- **[DEPLOYMENT.md](./DEPLOYMENT.md)** - Three-tier deployment strategy (TrueNAS + Cloud)
 - **[patterns.md](./patterns.md)** - Common SaaS patterns (webhooks, uploads, email, etc.)
 - **[testing.md](./testing.md)** - Testing strategy, TDD approach, and coverage goals
 
@@ -69,12 +70,14 @@ cp .env.example .env.local
 pnpm supabase init
 pnpm supabase start
 
-# 4. Generate types and run migrations
+# 4. Run migrations (creates tables + RLS policies)
+pnpm supabase db reset
+
+# 5. Generate types
 mkdir -p types
 pnpm supabase gen types typescript --local > types/database.ts
-pnpm db:migrate
 
-# 5. Start development
+# 6. Start development
 pnpm dev
 ```
 
@@ -108,11 +111,15 @@ pnpm test:coverage                # With coverage
 pnpm lint                         # Lint code
 pnpm type-check                   # TypeScript check
 
-# Database
-pnpm db:generate                  # Generate migrations
-pnpm db:migrate                   # Run migrations
-pnpm db:push                      # Quick push (solo dev)
-pnpm db:studio                    # Open Drizzle Studio
+# Database - Migrations (Supabase = source of truth)
+pnpm supabase migration new <name>  # Create SQL migration with RLS
+pnpm supabase db reset              # Apply migrations locally
+pnpm supabase db push               # Push to cloud
+
+# Database - Schema Generation (Drizzle = auto-generated from DB)
+pnpm exec dotenv -e .env.local -- drizzle-kit introspect  # Generate from DB
+cp drizzle/migrations/schema.ts src/lib/drizzle/schema.ts # Use for queries
+pnpm db:studio                      # Drizzle Studio (inspection)
 ```
 
 ---
@@ -215,3 +222,9 @@ This is a living codebase. Your insights make it better. 🚀
 - Optimistic UI updates
 - Row Level Security (database-enforced)
 - Accessible UI (WCAG 2.1 AA compliant)
+
+**Deployment Strategy:**
+- Three-tier repository approach (demo, template, production apps)
+- Bootstrap phase: $0/month (TrueNAS self-hosted)
+- Cloud migration: Only when apps are successful
+- See [DEPLOYMENT.md](./DEPLOYMENT.md) for comprehensive guide
