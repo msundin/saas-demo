@@ -69,6 +69,12 @@ export async function middleware(request: NextRequest) {
     }
   }
 
+  // SEO Protection: Add X-Robots-Tag header to block search engines
+  const allowIndexing = process.env.NEXT_PUBLIC_ROBOTS !== 'noindex'
+  if (!allowIndexing) {
+    supabaseResponse.headers.set('X-Robots-Tag', 'noindex, nofollow')
+  }
+
   return supabaseResponse
 }
 

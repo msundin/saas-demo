@@ -1,1719 +1,1562 @@
-# Deployment Guide - Cloud Infrastructure Setup
+# Deployment Guide: Hybrid Bootstrap Strategy
 
-**Version:** 2.0.0 (2025 Best Practices)
 **Last Updated:** October 2025
-**Status:** Production-Ready
-
-This guide covers deploying your SaaS template to Vercel and Supabase Cloud with a multi-tenant PostgreSQL schema architecture.
+**Version:** 2.0.0
+**Strategy:** Self-Hosted → Cloud Migration Path
 
 ---
 
 ## Table of Contents
 
-- [Section 0: Prerequisites & Account Setup](#section-0-prerequisites--account-setup)
-- [Section 1: Understanding the Architecture](#section-1-understanding-the-architecture)
-- [Section 2: ⚠️ CRITICAL SAFETY WARNINGS](#section-2-️-critical-safety-warnings)
-- [Section 3: Supabase Project #1 Setup](#section-3-supabase-project-1-setup-infswsolcom)
-- [Section 4: Supabase Project #2 Setup](#section-4-supabase-project-2-setup-novatratechcom)
-- [Section 5: Vercel Template Project Setup](#section-5-vercel-template-project-setup)
-- [Section 6: Vercel Production App Projects](#section-6-vercel-production-app-projects)
-- [Section 7: DNS Configuration](#section-7-dns-configuration)
-- [Section 8: Environment Variables](#section-8-environment-variables-schema-specific)
-- [Section 9: Creating New Production App](#section-9-creating-new-production-app-from-template)
-- [Section 10: Safe Database Operations](#section-10-safe-database-operations)
-- [Section 11: Branch Workflows](#section-11-branch-workflows)
-- [Section 12: Migrating App to Paid Tier](#section-12-migrating-app-to-paid-tier)
-- [Section 13: SEO Protection](#section-13-seo-protection)
-- [Section 14: Monitoring & Limits](#section-14-monitoring--limits)
-- [Section 15: Troubleshooting](#section-15-troubleshooting)
-- [Section 16: Complete Verification Checklist](#section-16-complete-verification-checklist)
+1. [Overview](#overview)
+2. [Architecture](#architecture)
+3. [Prerequisites](#prerequisites)
+4. [Phase 1: Bootstrap Setup](#phase-1-bootstrap-setup)
+5. [Phase 2: Production Migration](#phase-2-production-migration)
+6. [Environment Configuration](#environment-configuration)
+7. [OAuth Setup](#oauth-setup)
+8. [Backup Strategy](#backup-strategy)
+9. [Troubleshooting](#troubleshooting)
+10. [Cost Analysis](#cost-analysis)
 
 ---
 
-## Section 0: Prerequisites & Account Setup
+## Overview
 
-### Required Accounts
+This deployment strategy allows you to:
+- ✅ Test unlimited SaaS ideas for **$0/month**
+- ✅ Use your existing TrueNAS SCALE server for Supabase hosting
+- ✅ Leverage Vercel's free tier for global CDN
+- ✅ Migrate individual apps to cloud only when they gain traction
+- ✅ **No code changes** required between self-hosted and cloud
 
-1. **GitHub Account** (you already have)
-2. **Supabase Account** (sign up with GitHub OAuth)
-3. **Vercel Account** (sign up with GitHub OAuth)
+### Philosophy
 
-### Account Creation Steps
+**Bootstrap Phase:** Run everything free until you validate product-market fit.
+**Production Phase:** Pay only for successful apps that have real users/revenue.
 
-#### Create Supabase Account
-
-```bash
-# 1. Go to https://supabase.com
-# 2. Click "Start your project"
-# 3. Choose "Continue with GitHub" (recommended)
-# 4. Authorize Supabase to access your GitHub account
-# 5. You'll be redirected to the Supabase dashboard
-```
-
-#### Create Vercel Account
-
-```bash
-# 1. Go to https://vercel.com
-# 2. Click "Sign Up"
-# 3. Choose "Continue with GitHub" (recommended)
-# 4. Authorize Vercel to access your GitHub account
-# 5. You'll be redirected to the Vercel dashboard
-```
-
-### Install Required CLIs
-
-```bash
-# Vercel CLI (for manual deployments and debugging)
-pnpm add -D vercel
-
-# Authenticate Vercel CLI
-pnpm vercel login
-# Choose "Continue with GitHub"
-
-# Verify authentication
-pnpm vercel whoami
-# Should show your GitHub username
-```
-
-**Note:** Supabase CLI is already installed in this project (`pnpm supabase --version`).
-
-### Verify GitHub Access
-
-```bash
-# Ensure your GitHub account has:
-# ✅ Access to msundin/saas-template repository
-# ✅ Ability to create new repositories
-# ✅ Connected to Vercel
-# ✅ Connected to Supabase
-
-# Check repository access
-gh repo view msundin/saas-template
-
-# Check if Vercel has access
-# Go to https://vercel.com/account/integrations
-# Verify GitHub integration is active
-
-# Check if Supabase has access
-# Go to https://supabase.com/dashboard
-# Projects should be visible
-```
+This approach saves **$400-900/month** compared to cloud-only hosting during the validation phase.
 
 ---
 
-## Section 1: Understanding the Architecture
+## Architecture
 
-### Why This Architecture?
-
-**Goal:** Maximize free tier usage while maintaining professional infrastructure for:
-- Template reference app
-- Client demos
-- Multiple production apps
-
-**Solution:** Multi-tenant database with PostgreSQL schemas + strategic domain usage.
-
-### PostgreSQL Schemas Explained (Simple Analogy)
-
-Think of a Supabase project as an **apartment building**:
-
-- **Building** = Supabase Project (500MB total)
-- **Apartments** = PostgreSQL Schemas (each completely isolated)
-- **Residents** = Your deployed apps
-
-Each apartment (schema) has:
-- ✅ Its own tables (data completely isolated)
-- ✅ Its own users/auth data
-- ✅ Its own RLS policies
-- ✅ Cannot see other apartments' data
-
-All apartments share:
-- 🔄 The same building utilities (500MB disk space)
-- 🔄 The same connection pool
-- 🔄 The same backup schedule
-
-**Example:**
+### Three-Stage Architecture
 
 ```
-Supabase Project #1 (infswsol.com - 500MB total)
-├── Schema: template_infswsol_com (150MB)
-│   ├── Table: users
-│   ├── Table: tasks
-│   └── Table: profiles
-├── Schema: demo_infswsol_com (100MB)
-│   ├── Table: users (different data!)
-│   ├── Table: tasks (different data!)
-│   └── Table: profiles (different data!)
-└── 250MB available for future demos
+┌─────────────────────────────────────────────────────────────┐
+│ STAGE 1: Local Development                                  │
+├─────────────────────────────────────────────────────────────┤
+│ Laptop/Desktop:                                              │
+│   • pnpm dev → localhost:3000                                │
+│   • Supabase Local (Docker) → localhost:54321               │
+│   • Fast iteration, no internet dependency                   │
+│                                                               │
+│ Cost: $0                                                      │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│ STAGE 2: Bootstrap / MVP Testing (0-100 users)              │
+├─────────────────────────────────────────────────────────────┤
+│ Frontend: Vercel Free Tier                                   │
+│   • demo.infswsol.com                                        │
+│   • template.infswsol.com                                    │
+│   • app1-20.novatratech.com                                  │
+│   • Global CDN, automatic HTTPS                              │
+│   • Unlimited deployments                                    │
+│                                                               │
+│ Backend: TrueNAS SCALE (Your Home Server)                    │
+│   • Supabase instances (Docker containers)                   │
+│   • One instance per app                                     │
+│   • Full Supabase features (auth, RLS, realtime, storage)   │
+│   • Accessible via DDNS or Cloudflare Tunnel                 │
+│                                                               │
+│ Cost: $0/month for unlimited apps                            │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│ STAGE 3: Production (100+ active users, paying customers)   │
+├─────────────────────────────────────────────────────────────┤
+│ Frontend: Vercel Pro                                         │
+│   • app1.novatratech.com                                     │
+│   • Better performance, more bandwidth                       │
+│   • $20/month                                                │
+│                                                               │
+│ Backend: Supabase Cloud                                      │
+│   • Managed PostgreSQL                                       │
+│   • Automated backups                                        │
+│   • Global replication                                       │
+│   • $25/month                                                │
+│                                                               │
+│ Cost: $45/month per successful app only                      │
+│ (Other apps stay free on Stage 2 until needed)               │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-### Why 2 Supabase Projects?
-
-**Project #1: infswsol.com (Demos/Reference)**
-- Purpose: Template reference, client demos, experiments
-- Can reset data freely without affecting production
-- Schemas: `template_infswsol_com`, `demo_infswsol_com`
-
-**Project #2: novatratech.com (Production Apps)**
-- Purpose: Real production apps with real users
-- Protected from demo resets
-- Schemas: `app1_novatratech_com`, `app2_novatratech_com`, etc.
-- Migrate individual apps to paid tier when they become profitable
-
-### Domain Strategy
-
-**infswsol.com (Demos/Reference/Templates)**
+### Network Topology
 
 ```
-infswsol.com (apex)              → Your home server (NOT Vercel)
-├── [existing subdomains]        → Your home server
-├── template.infswsol.com        → Vercel (manually added) ✅
-└── demo.infswsol.com            → Vercel (manually added) ✅
-```
-
-**Why manual subdomains?**
-- Apex domain points to home server
-- Cannot use wildcard trick
-- Must add each subdomain manually in Vercel
-
-**novatratech.com (Production Apps)**
-
-```
-novatratech.com (apex)           → Vercel (unlocks all subdomains) ✅
-├── app1.novatratech.com         → Auto-available (wildcard)
-├── app2.novatratech.com         → Auto-available (wildcard)
-├── app3.novatratech.com         → Auto-available (wildcard)
-└── [unlimited subdomains]       → Auto-available (wildcard)
-```
-
-**Why apex domain?**
-- Pointing apex to Vercel enables wildcard DNS
-- All subdomains automatically work
-- No manual addition needed
-- Perfect for scaling production apps
-
-### Data Isolation - How It Works
-
-**Question:** Can app1.novatratech.com see app2.novatratech.com's data?
-
-**Answer:** NO! Completely impossible. Here's why:
-
-1. **Application Level:**
-   - Each app sets `DB_SCHEMA=app1_novatratech_com` in environment variables
-   - Database client automatically sets `search_path` to that schema
-   - App can only see tables in its schema
-
-2. **Database Level:**
-   - PostgreSQL schemas are namespace-isolated
-   - `app1_novatratech_com.users` ≠ `app2_novatratech_com.users`
-   - Even if you tried, you can't access other schemas without explicit permission
-
-3. **RLS Level:**
-   - Row Level Security policies are schema-scoped
-   - Each schema has its own auth.users table reference
-   - User IDs are completely separate
-
-**Example Query:**
-
-```sql
--- In app1.novatratech.com context:
-SELECT * FROM tasks;
--- Returns only app1's tasks (via search_path)
-
--- Trying to access app2's tasks:
-SELECT * FROM app2_novatratech_com.tasks;
--- ERROR: permission denied (no cross-schema access granted)
-```
-
-### 500MB Shared Limit Per Project
-
-**Supabase Free Tier:** 500MB disk space per project
-
-**Project #1 (infswsol.com):**
-- Schema `template_infswsol_com`: ~150MB
-- Schema `demo_infswsol_com`: ~100MB
-- Available: ~250MB for future demos
-- **Total: 500MB**
-
-**Project #2 (novatratech.com):**
-- Schema `app1_novatratech_com`: ~100MB
-- Schema `app2_novatratech_com`: ~80MB
-- Schema `app3_novatratech_com`: ~90MB
-- Available: ~230MB for future apps
-- **Total: 500MB**
-
-**What happens when you hit 500MB?**
-- Supabase will warn you at 90% usage
-- Database becomes read-only at 100%
-- **Solution:** Migrate profitable app to paid tier ($25/month = 8GB)
-
-**How many apps can fit?**
-- Small apps (10-50MB): ~10 apps per project
-- Medium apps (50-100MB): ~5 apps per project
-- Large apps (100MB+): ~3-4 apps per project
-
----
-
-## Section 2: ⚠️ CRITICAL SAFETY WARNINGS
-
-### Commands That Affect ALL Schemas
-
-**DANGER ZONE:** These commands operate on the ENTIRE database:
-
-```bash
-# ❌ DANGEROUS - Affects ALL schemas
-pnpm db:reset
-pnpm db:drop
-psql $DATABASE_URL -c "DROP SCHEMA public CASCADE;"
-
-# ❌ DANGEROUS - Without DB_SCHEMA
-pnpm db:push
-pnpm db:generate
-
-# ❌ DANGEROUS - Backup/restore without schema
-pg_dump $DATABASE_URL
-pg_restore $DATABASE_URL
-```
-
-**SAFE ALTERNATIVES:**
-
-```bash
-# ✅ SAFE - Targets specific schema
-DB_SCHEMA=template_infswsol_com pnpm db:push
-DB_SCHEMA=demo_infswsol_com pnpm db:reset-schema
-DB_SCHEMA=app1_novatratech_com pnpm db:generate
-
-# ✅ SAFE - Schema-specific backup
-pg_dump --schema=app1_novatratech_com $DATABASE_URL > app1.sql
-```
-
-### Required Safety Practices
-
-**RULE #1:** ALWAYS set `DB_SCHEMA` for cloud database operations
-
-```bash
-# ✅ Correct
-DB_SCHEMA=template_infswsol_com pnpm db:push
-
-# ❌ Wrong (will error with safety script)
-pnpm db:push
-```
-
-**RULE #2:** Use `pnpm db:reset-schema` instead of `pnpm db:reset`
-
-```bash
-# ✅ Correct (requires confirmation)
-DB_SCHEMA=demo_infswsol_com pnpm db:reset-schema
-
-# ❌ Wrong (would reset ALL schemas)
-pnpm db:reset
-```
-
-**RULE #3:** Local development doesn't need `DB_SCHEMA`
-
-```bash
-# ✅ Correct (local uses 'public' schema)
-pnpm dev
-pnpm db:push
-
-# Local .env.local (no DB_SCHEMA needed)
-DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres
-```
-
-**RULE #4:** List schemas before operations
-
-```bash
-# ✅ Always check what schemas exist
-pnpm db:list-schemas
-
-# Output:
-# Schemas in database:
-# - template_infswsol_com
-# - demo_infswsol_com
-# - app1_novatratech_com
-# - app2_novatratech_com
-```
-
-### Backup Strategies
-
-**Per-Schema Backups (Recommended):**
-
-```bash
-# Backup single schema
-pg_dump \
-  --schema=app1_novatratech_com \
-  $DATABASE_URL \
-  > backups/app1_$(date +%Y%m%d).sql
-
-# Restore single schema
-psql $DATABASE_URL < backups/app1_20251024.sql
-```
-
-**Full Project Backup (All Schemas):**
-
-```bash
-# Backup entire database
-pg_dump $DATABASE_URL > backups/full_$(date +%Y%m%d).sql
-
-# Restore entire database
-psql $DATABASE_URL < backups/full_20251024.sql
-```
-
-### Recovery Procedures
-
-**Scenario 1: Accidentally deleted data in one schema**
-
-```bash
-# 1. Restore from latest backup
-psql $DATABASE_URL < backups/app1_novatratech_com_latest.sql
-
-# 2. Verify data restored
-DB_SCHEMA=app1_novatratech_com pnpm db:studio
-```
-
-**Scenario 2: Schema corruption**
-
-```bash
-# 1. Drop corrupted schema
-psql $DATABASE_URL -c "DROP SCHEMA app1_novatratech_com CASCADE;"
-
-# 2. Recreate schema
-psql $DATABASE_URL -c "CREATE SCHEMA app1_novatratech_com;"
-
-# 3. Restore from backup
-psql $DATABASE_URL < backups/app1_novatratech_com_latest.sql
-
-# 4. Verify structure
-DB_SCHEMA=app1_novatratech_com pnpm db:push
-```
-
-### Real-World Examples of Mistakes
-
-**Mistake #1: Running migrations without DB_SCHEMA**
-
-```bash
-# ❌ What happened:
-pnpm db:push
-
-# Result: Migrations ran on ALL schemas
-# - template_infswsol_com ✅ (intended)
-# - demo_infswsol_com ❌ (unintended)
-# - app1_novatratech_com ❌ (unintended)
-# - app2_novatratech_com ❌ (unintended)
-
-# ⚠️ Now all schemas have the new migration
-# Rollback is complex and risky
-
-# ✅ Prevention: Safety scripts now require DB_SCHEMA
-```
-
-**Mistake #2: Resetting wrong schema**
-
-```bash
-# ❌ What happened:
-DB_SCHEMA=app1_novatratech_com pnpm db:reset-schema
-# Typed schema name wrong: "app1_novatech_com"
-
-# Result: Deleted production data!
-
-# ✅ Prevention: reset-schema.js requires typing exact schema name
-# ✅ Recovery: Restore from latest backup
+┌──────────────┐
+│  Internet    │
+└──────┬───────┘
+       │
+       ├──────────────> Vercel Edge Network (Frontend)
+       │                • demo.infswsol.com
+       │                • template.infswsol.com
+       │                • app1.novatratech.com
+       │
+       │                API Requests
+       ↓
+┌──────────────────────────────────────────┐
+│  Your Home Network                        │
+│  ┌────────────────────────────────────┐  │
+│  │ TrueNAS SCALE                       │  │
+│  │                                     │  │
+│  │ ┌─────────────────────────────┐    │  │
+│  │ │ Docker Compose Stack #1     │    │  │
+│  │ │  • Supabase (demo)          │    │  │
+│  │ │    - PostgreSQL             │    │  │
+│  │ │    - Auth                   │    │  │
+│  │ │    - Storage                │    │  │
+│  │ │    - Realtime               │    │  │
+│  │ └─────────────────────────────┘    │  │
+│  │                                     │  │
+│  │ ┌─────────────────────────────┐    │  │
+│  │ │ Docker Compose Stack #2     │    │  │
+│  │ │  • Supabase (template)      │    │  │
+│  │ └─────────────────────────────┘    │  │
+│  │                                     │  │
+│  │ ┌─────────────────────────────┐    │  │
+│  │ │ Docker Compose Stack #3-20  │    │  │
+│  │ │  • Supabase (app1-18)       │    │  │
+│  │ └─────────────────────────────┘    │  │
+│  └────────────────────────────────────┘  │
+│                                           │
+│  Exposed via:                             │
+│  • Cloudflare Tunnel (recommended), OR    │
+│  • DDNS + Port Forwarding                 │
+└───────────────────────────────────────────┘
 ```
 
 ---
 
-## Section 3: Supabase Project #1 Setup (infswsol.com)
+## Prerequisites
 
-### Create Project for Demos/Reference
+### TrueNAS SCALE Server
+
+- ✅ TrueNAS SCALE installed and running
+- ✅ Docker and Docker Compose available
+- ✅ ZFS pool with sufficient space (recommend 100GB+ per Supabase instance)
+- ✅ Static local IP configured
+- ✅ SSH access enabled
+
+### Home Network
+
+- ✅ Stable internet connection (recommend 50+ Mbps upload)
+- ✅ Router admin access for port forwarding (if not using Cloudflare Tunnel)
+- ✅ Dynamic DNS service account (if not using static IP)
+  - Recommended: [DuckDNS](https://www.duckdns.org/) (free)
+  - Or: [No-IP](https://www.noip.com/) (free tier available)
+- ✅ OR Cloudflare account (for Cloudflare Tunnel - recommended)
+
+### Development Machine
+
+- ✅ Node.js 20+ installed
+- ✅ pnpm installed
+- ✅ Git configured
+- ✅ Vercel CLI installed: `pnpm install -g vercel`
+
+### Accounts Needed
+
+- ✅ Vercel account (free tier)
+- ✅ GitHub account (for OAuth and deployment)
+- ✅ Cloudflare account (optional but recommended for tunnel)
+
+---
+
+## Phase 1: Bootstrap Setup
+
+### Step 1: TrueNAS - Install Supabase
+
+There's an automated installer specifically for TrueNAS SCALE!
+
+#### 1.1 SSH into TrueNAS
 
 ```bash
-# 1. Go to https://supabase.com/dashboard
-# 2. Click "New Project"
-# 3. Fill in details:
-#    - Name: "saas-reference-demos"
-#    - Database Password: [generate strong password]
-#    - Region: Choose closest to your users
-#    - Pricing Plan: Free
-# 4. Click "Create new project"
-# 5. Wait ~2 minutes for project to provision
+ssh admin@your-truenas-ip
 ```
 
-### Get Project Credentials
+#### 1.2 Create ZFS Dataset
 
 ```bash
-# 1. Go to Project Settings > API
-# 2. Copy the following (you'll need these for Vercel):
+# Create dataset for Supabase installations
+zfs create pool1/supabase
 
-# Project URL
-NEXT_PUBLIC_SUPABASE_URL=https://xxxxx.supabase.co
-
-# Anon/Public Key
-NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGci...
-
-# 3. Go to Project Settings > Database
-# 4. Copy Connection String (Pooler):
-
-# Connection string (port 6543 for pooler)
-DATABASE_URL=postgresql://postgres.[project-ref]:[password]@aws-0-us-west-1.pooler.supabase.com:6543/postgres
+# Create subdirectories for each app
+mkdir -p /mnt/pool1/supabase/demo
+mkdir -p /mnt/pool1/supabase/template
+mkdir -p /mnt/pool1/supabase/app1
+# Add more as needed...
 ```
 
-**Important:** Save these credentials securely. You'll need them for Vercel environment variables.
-
-### Create Schemas
+#### 1.3 Install Supabase (First Instance)
 
 ```bash
-# Use transaction mode (port 5432) for DDL operations
-DATABASE_URL_DIRECT=postgresql://postgres.[project-ref]:[password]@aws-0-us-west-1.pooler.supabase.com:5432/postgres
+# Download the automated installer
+cd /mnt/pool1/supabase/demo
+wget https://raw.githubusercontent.com/Jbcheck/truenas-supabase-installer/main/install-supabase.sh
+chmod +x install-supabase.sh
 
-# Create schemas for infswsol.com apps
-psql "$DATABASE_URL_DIRECT" << 'EOF'
--- Create template schema
-CREATE SCHEMA IF NOT EXISTS template_infswsol_com;
-
--- Create demo schema
-CREATE SCHEMA IF NOT EXISTS demo_infswsol_com;
-
--- Verify schemas created
-SELECT schema_name
-FROM information_schema.schemata
-WHERE schema_name LIKE '%infswsol%'
-ORDER BY schema_name;
-EOF
-
-# Expected output:
-#  schema_name
-# --------------------------
-#  demo_infswsol_com
-#  template_infswsol_com
-# (2 rows)
+# Run installer (will generate secure passwords automatically)
+sudo ./install-supabase.sh
 ```
 
-### Run Migrations Per Schema
+The installer will:
+- Generate secure JWT secrets and database passwords
+- Create `.env` file with all configuration
+- Set up Docker Compose configuration
+- Create systemd service for auto-start
+- Configure port mappings
+
+#### 1.4 Verify Installation
 
 ```bash
-# 1. Setup environment for template schema
-export DATABASE_URL="postgresql://postgres.[project-ref]:[password]@aws-0-us-west-1.pooler.supabase.com:6543/postgres"
-export DB_SCHEMA=template_infswsol_com
+# Check containers are running
+docker ps
 
-# 2. Run migrations for template schema
-pnpm db:push
-
-# Output:
-# ✅ Targeting schema: template_infswsol_com
-# Applying migrations...
-# ✅ Done!
-
-# 3. Setup environment for demo schema
-export DB_SCHEMA=demo_infswsol_com
-
-# 4. Run migrations for demo schema
-pnpm db:push
-
-# Output:
-# ✅ Targeting schema: demo_infswsol_com
-# Applying migrations...
-# ✅ Done!
+# Should see containers:
+# - supabase-db (PostgreSQL)
+# - supabase-studio
+# - supabase-auth
+# - supabase-rest
+# - supabase-realtime
+# - supabase-storage
 ```
 
-### Verify Setup
+Access Supabase Studio:
+```
+http://your-truenas-ip:3000
+```
+
+**IMPORTANT:** Save the credentials displayed during installation!
 
 ```bash
-# 1. List all schemas
-pnpm db:list-schemas
+# Credentials are in .env file:
+cat /mnt/pool1/supabase/demo/.env
 
-# Expected output:
-# Schemas in database:
-# - template_infswsol_com
-# - demo_infswsol_com
+# Save these securely:
+# - JWT_SECRET (for your Next.js app)
+# - POSTGRES_PASSWORD
+# - ANON_KEY (public key)
+# - SERVICE_ROLE_KEY (secret key)
+```
 
-# 2. Open Drizzle Studio to verify tables
-DB_SCHEMA=template_infswsol_com pnpm db:studio
-# Should show: users, tasks, profiles tables
+#### 1.5 Install Additional Instances
 
-DB_SCHEMA=demo_infswsol_com pnpm db:studio
-# Should show: users, tasks, profiles tables (separate data!)
+Repeat for each app, using **different ports**:
+
+```bash
+# Template instance
+cd /mnt/pool1/supabase/template
+# Modify install script or .env to use ports: 3001, 8001, 5433
+./install-supabase.sh
+
+# App1 instance
+cd /mnt/pool1/supabase/app1
+# Modify ports: 3002, 8002, 5434
+./install-supabase.sh
+```
+
+**Port Mapping Convention:**
+
+| Instance | Studio | API Gateway | PostgreSQL |
+|----------|--------|-------------|------------|
+| demo     | 3000   | 8000        | 5432       |
+| template | 3001   | 8001        | 5433       |
+| app1     | 3002   | 8002        | 5434       |
+| app2     | 3003   | 8003        | 5435       |
+
+### Step 2: Network Access Configuration
+
+Choose ONE of these approaches:
+
+#### Option A: Cloudflare Tunnel (Recommended - Most Secure)
+
+**Why Cloudflare Tunnel?**
+- ✅ No port forwarding needed (no holes in firewall)
+- ✅ Automatic HTTPS with valid certificates
+- ✅ DDoS protection
+- ✅ Better performance (Cloudflare CDN)
+- ✅ Free for personal use
+
+**Setup:**
+
+1. **Install Cloudflare Tunnel on TrueNAS:**
+
+```bash
+# Install cloudflared
+wget https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
+sudo dpkg -i cloudflared-linux-amd64.deb
+
+# Authenticate
+cloudflared tunnel login
+# Opens browser - log in to Cloudflare
+
+# Create tunnel
+cloudflared tunnel create saas-backend
+
+# Save the tunnel ID and credentials shown
+```
+
+2. **Configure DNS in Cloudflare Dashboard:**
+
+Go to Cloudflare → Your Domain → DNS:
+
+```
+Type: CNAME
+Name: demo-api
+Target: <tunnel-id>.cfargotunnel.com
+
+Type: CNAME
+Name: template-api
+Target: <tunnel-id>.cfargotunnel.com
+
+Type: CNAME
+Name: app1-api
+Target: <tunnel-id>.cfargotunnel.com
+```
+
+3. **Create Tunnel Configuration:**
+
+```bash
+# Create config file
+sudo nano ~/.cloudflared/config.yml
+```
+
+```yaml
+tunnel: <your-tunnel-id>
+credentials-file: /root/.cloudflared/<tunnel-id>.json
+
+ingress:
+  # Demo Supabase API
+  - hostname: demo-api.infswsol.com
+    service: http://localhost:8000
+
+  # Template Supabase API
+  - hostname: template-api.infswsol.com
+    service: http://localhost:8001
+
+  # App1 Supabase API
+  - hostname: app1-api.novatratech.com
+    service: http://localhost:8002
+
+  # Catch-all (required)
+  - service: http_status:404
+```
+
+4. **Start Tunnel Service:**
+
+```bash
+# Start tunnel
+sudo cloudflared service install
+sudo systemctl start cloudflared
+sudo systemctl enable cloudflared
+
+# Verify running
+sudo systemctl status cloudflared
+```
+
+Your Supabase instances are now accessible:
+- `https://demo-api.infswsol.com` → TrueNAS port 8000
+- `https://template-api.infswsol.com` → TrueNAS port 8001
+- `https://app1-api.novatratech.com` → TrueNAS port 8002
+
+#### Option B: DDNS + Port Forwarding (Alternative)
+
+**If you prefer traditional approach or can't use Cloudflare:**
+
+1. **Set up Dynamic DNS:**
+
+```bash
+# Install ddclient on TrueNAS
+sudo apt install ddclient
+
+# Configure for your DDNS provider
+# Example: DuckDNS
+sudo nano /etc/ddclient.conf
+```
+
+```conf
+protocol=duckdns
+use=web
+server=www.duckdns.org
+login=your-domain
+password=your-token
+your-domain.duckdns.org
+```
+
+```bash
+# Start ddclient
+sudo systemctl start ddclient
+sudo systemctl enable ddclient
+```
+
+2. **Configure Router Port Forwarding:**
+
+Forward these ports to your TrueNAS IP:
+
+| External Port | Internal Port | Protocol | Service           |
+|---------------|---------------|----------|-------------------|
+| 8000          | 8000          | TCP      | Demo API          |
+| 8001          | 8001          | TCP      | Template API      |
+| 8002          | 8002          | TCP      | App1 API          |
+| 443           | 443           | TCP      | HTTPS (via proxy) |
+
+3. **Set up Reverse Proxy with SSL (Caddy):**
+
+```bash
+# Install Caddy on TrueNAS
+sudo apt install -y debian-keyring debian-archive-keyring apt-transport-https
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/caddy-stable.list
+sudo apt update
+sudo apt install caddy
+```
+
+```bash
+# Configure Caddyfile
+sudo nano /etc/caddy/Caddyfile
+```
+
+```caddy
+demo-api.your-domain.duckdns.org {
+    reverse_proxy localhost:8000
+}
+
+template-api.your-domain.duckdns.org {
+    reverse_proxy localhost:8001
+}
+
+app1-api.your-domain.duckdns.org {
+    reverse_proxy localhost:8002
+}
+```
+
+```bash
+# Start Caddy
+sudo systemctl reload caddy
+```
+
+### Step 3: Vercel Deployment
+
+#### 3.1 Prepare Your Repository
+
+```bash
+# From your local development directory
+cd /path/to/saas-template
+
+# Ensure .env.local is in .gitignore (already is)
+# Create .env.example for reference (we'll do this later)
+```
+
+#### 3.2 Deploy to Vercel
+
+**For each app (demo, template, app1...):**
+
+```bash
+# Login to Vercel
+vercel login
+
+# Deploy
+vercel
+
+# Follow prompts:
+# - Set up and deploy? Yes
+# - Scope: Your account
+# - Link to existing project? No
+# - Project name: demo-infswsol (or template-infswsol, app1-novatratech, etc.)
+# - Directory: ./
+# - Override settings? No
+
+# After successful deployment, configure environment variables
+```
+
+#### 3.3 Configure Environment Variables in Vercel
+
+**Via Vercel Dashboard:**
+
+1. Go to: https://vercel.com/your-username/demo-infswsol
+2. Click "Settings" → "Environment Variables"
+3. Add these variables:
+
+**For demo.infswsol.com:**
+
+```env
+# Supabase Configuration (pointing to your TrueNAS)
+NEXT_PUBLIC_SUPABASE_URL=https://demo-api.infswsol.com
+NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon-key-from-truenas-demo-env>
+
+# Database URL (for Server Actions)
+DATABASE_URL=postgresql://postgres:<password>@demo-api.infswsol.com:5432/postgres
+
+# Node Environment
+NODE_ENV=production
+
+# Optional: SEO Control
+NEXT_PUBLIC_ROBOTS=noindex
+```
+
+**For template.infswsol.com:**
+
+```env
+NEXT_PUBLIC_SUPABASE_URL=https://template-api.infswsol.com
+NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon-key-from-truenas-template-env>
+DATABASE_URL=postgresql://postgres:<password>@template-api.infswsol.com:5433/postgres
+NODE_ENV=production
+NEXT_PUBLIC_ROBOTS=noindex
+```
+
+**For app1.novatratech.com:**
+
+```env
+NEXT_PUBLIC_SUPABASE_URL=https://app1-api.novatratech.com
+NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon-key-from-truenas-app1-env>
+DATABASE_URL=postgresql://postgres:<password>@app1-api.novatratech.com:5434/postgres
+NODE_ENV=production
+# No NEXT_PUBLIC_ROBOTS (production app, allow indexing)
+```
+
+#### 3.4 Configure Custom Domains
+
+**In Vercel Dashboard:**
+
+1. Go to Project → "Settings" → "Domains"
+2. Add custom domain:
+   - demo.infswsol.com
+   - template.infswsol.com
+   - app1.novatratech.com
+
+3. Update DNS records in your domain provider:
+
+```
+Type: CNAME
+Name: demo
+Value: cname.vercel-dns.com
+
+Type: CNAME
+Name: template
+Value: cname.vercel-dns.com
+
+Type: CNAME
+Name: app1
+Value: cname.vercel-dns.com
+```
+
+Wait 5-10 minutes for DNS propagation. Vercel will automatically provision SSL certificates.
+
+#### 3.5 Run Database Migrations
+
+**For each app's first deployment:**
+
+```bash
+# SSH into TrueNAS
+ssh admin@your-truenas-ip
+
+# Navigate to Supabase instance
+cd /mnt/pool1/supabase/demo
+
+# Access PostgreSQL container
+docker exec -it supabase-db psql -U postgres
+
+# Run migrations (copy from migrations/schema.sql)
+-- Or use Supabase Studio to run SQL
+```
+
+**Or use Supabase CLI remotely:**
+
+```bash
+# From your local machine, targeting TrueNAS Supabase
+DATABASE_URL=postgresql://postgres:<password>@demo-api.infswsol.com:5432/postgres \
+  pnpm supabase db push
+```
+
+### Step 4: Verify Bootstrap Setup
+
+#### 4.1 Test Frontend
+
+Visit your deployed apps:
+- https://demo.infswsol.com
+- https://template.infswsol.com
+- https://app1.novatratech.com
+
+Verify:
+- ✅ Page loads
+- ✅ HTTPS works (valid certificate)
+- ✅ No console errors
+
+#### 4.2 Test Authentication
+
+1. Sign up with test email
+2. Verify email redirect works
+3. Log in
+4. Verify dashboard access
+5. Log out
+
+#### 4.3 Test Database Connection
+
+1. Create a task in demo app
+2. SSH into TrueNAS:
+
+```bash
+docker exec -it supabase-db psql -U postgres -c "SELECT * FROM tasks;"
+```
+
+Verify task appears in database.
+
+#### 4.4 Test RLS Policies
+
+1. Create account A, create task
+2. Create account B, try to access tasks
+3. Verify account B cannot see account A's tasks
+
+### Step 5: Backup Configuration
+
+#### 5.1 ZFS Snapshots (TrueNAS)
+
+```bash
+# Create automated snapshot task in TrueNAS GUI:
+# Storage → Snapshots → Add
+
+# Snapshot Task Configuration:
+Dataset: pool1/supabase
+Recursive: Yes
+Snapshot Lifetime: 30 days
+Schedule: Daily at 3:00 AM
+```
+
+#### 5.2 Database Backups to Cloud
+
+**Set up automatic PostgreSQL dumps:**
+
+```bash
+# Create backup script
+sudo nano /usr/local/bin/supabase-backup.sh
+```
+
+```bash
+#!/bin/bash
+
+# Configuration
+BACKUP_DIR="/mnt/pool1/backups/supabase"
+DATE=$(date +%Y%m%d_%H%M%S)
+RETENTION_DAYS=30
+
+# Ensure backup directory exists
+mkdir -p "$BACKUP_DIR"
+
+# Backup each instance
+for instance in demo template app1; do
+    echo "Backing up $instance..."
+
+    # Get port for this instance
+    case $instance in
+        demo) PORT=5432 ;;
+        template) PORT=5433 ;;
+        app1) PORT=5434 ;;
+    esac
+
+    # Create backup
+    docker exec supabase-db-$instance pg_dump -U postgres \
+        > "$BACKUP_DIR/${instance}_${DATE}.sql"
+
+    echo "Backup completed: ${instance}_${DATE}.sql"
+done
+
+# Upload to cloud storage (optional - requires rclone configured)
+# rclone copy "$BACKUP_DIR" backblaze:saas-backups/supabase
+
+# Clean up old backups
+find "$BACKUP_DIR" -name "*.sql" -mtime +$RETENTION_DAYS -delete
+
+echo "Backup completed successfully"
+```
+
+```bash
+# Make executable
+sudo chmod +x /usr/local/bin/supabase-backup.sh
+
+# Add to crontab (daily at 2:00 AM)
+sudo crontab -e
+```
+
+```cron
+0 2 * * * /usr/local/bin/supabase-backup.sh >> /var/log/supabase-backup.log 2>&1
+```
+
+#### 5.3 Optional: Cloud Storage Sync (Backblaze B2)
+
+**Free tier: 10GB storage, 1GB daily egress**
+
+```bash
+# Install rclone
+curl https://rclone.org/install.sh | sudo bash
+
+# Configure Backblaze B2
+rclone config
+# Follow prompts to add Backblaze B2 remote
+
+# Test backup
+rclone copy /mnt/pool1/backups/supabase backblaze:saas-backups/supabase
+
+# Add to backup script (already shown above)
 ```
 
 ---
 
-## Section 4: Supabase Project #2 Setup (novatratech.com)
+## Phase 2: Production Migration
 
-### Create Project for Production Apps
+### When to Migrate to Cloud
 
-```bash
-# 1. Go to https://supabase.com/dashboard
-# 2. Click "New Project"
-# 3. Fill in details:
-#    - Name: "saas-production-apps"
-#    - Database Password: [generate different strong password]
-#    - Region: Same as Project #1 (for consistency)
-#    - Pricing Plan: Free
-# 4. Click "Create new project"
-# 5. Wait ~2 minutes for project to provision
-```
+Migrate individual apps when they reach:
+- ✅ 100+ daily active users
+- ✅ Paying customers (recurring revenue)
+- ✅ Need for global performance
+- ✅ Need for 99.9%+ uptime SLA
+- ✅ Team collaboration (multiple developers)
 
-### Get Project Credentials
+**Cost-benefit:** At $45/month per app, wait until you have revenue to justify the cost.
 
-```bash
-# 1. Go to Project Settings > API
-# 2. Copy the following (DIFFERENT from Project #1):
+### Migration Process (Self-Hosted → Supabase Cloud)
 
-# Project URL
-NEXT_PUBLIC_SUPABASE_URL=https://yyyyy.supabase.co
+#### Step 1: Create Supabase Cloud Project
 
-# Anon/Public Key
-NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGci...
+1. Go to https://supabase.com
+2. Create new project:
+   - Project name: app1-novatratech
+   - Database password: Generate strong password (save it!)
+   - Region: Choose closest to your users
+   - Plan: Pro ($25/month)
 
-# 3. Go to Project Settings > Database
-# 4. Copy Connection String (Pooler):
+3. Save project credentials:
+   - Project URL: `https://abc123.supabase.co`
+   - `anon` public key
+   - `service_role` secret key
+   - Database password
 
-# Connection string
-DATABASE_URL=postgresql://postgres.[project-ref-2]:[password]@aws-0-us-west-1.pooler.supabase.com:6543/postgres
-```
-
-**Important:** These are DIFFERENT credentials from Project #1. Keep them separate.
-
-### Create Initial Schema
+#### Step 2: Export Data from TrueNAS
 
 ```bash
-# Use transaction mode for DDL
-DATABASE_URL_DIRECT=postgresql://postgres.[project-ref-2]:[password]@aws-0-us-west-1.pooler.supabase.com:5432/postgres
+# SSH into TrueNAS
+ssh admin@your-truenas-ip
 
-# Create schema for first production app
-psql "$DATABASE_URL_DIRECT" << 'EOF'
--- Create app1 schema
-CREATE SCHEMA IF NOT EXISTS app1_novatratech_com;
+# Export database (app1 example)
+docker exec supabase-db-app1 pg_dump -U postgres \
+    --clean \
+    --if-exists \
+    --format=custom \
+    --file=/tmp/app1-migration.dump
 
--- Verify schema created
-SELECT schema_name
-FROM information_schema.schemata
-WHERE schema_name LIKE '%novatratech%'
-ORDER BY schema_name;
-EOF
-
-# Expected output:
-#  schema_name
-# --------------------------
-#  app1_novatratech_com
-# (1 row)
+# Copy to local machine
+scp admin@your-truenas-ip:/tmp/app1-migration.dump ./app1-migration.dump
 ```
 
-### Run Migrations
+#### Step 3: Import to Supabase Cloud
 
 ```bash
-# 1. Setup environment for app1 schema
-export DATABASE_URL="postgresql://postgres.[project-ref-2]:[password]@aws-0-us-west-1.pooler.supabase.com:6543/postgres"
-export DB_SCHEMA=app1_novatratech_com
+# From your local machine
 
-# 2. Run migrations for app1 schema
-pnpm db:push
+# Set connection string (from Supabase Cloud dashboard)
+DB_URL="postgresql://postgres:[password]@db.abc123.supabase.co:5432/postgres"
 
-# Output:
-# ✅ Targeting schema: app1_novatratech_com
-# Applying migrations...
-# ✅ Done!
+# Restore database
+pg_restore --clean --if-exists \
+    --no-owner --no-acl \
+    --dbname="$DB_URL" \
+    app1-migration.dump
+
+# Verify import
+psql "$DB_URL" -c "SELECT count(*) FROM auth.users;"
+psql "$DB_URL" -c "SELECT count(*) FROM tasks;"
 ```
 
-### Verify Setup
+**Important:** This preserves:
+- ✅ All user accounts (with hashed passwords)
+- ✅ All user data
+- ✅ All RLS policies
+- ✅ All indexes and constraints
+
+Users can log in immediately with existing credentials!
+
+#### Step 4: Update Vercel Environment Variables
+
+**In Vercel Dashboard for app1.novatratech.com:**
+
+1. Go to Settings → Environment Variables
+2. Update these variables:
+
+```env
+# OLD (pointing to TrueNAS)
+NEXT_PUBLIC_SUPABASE_URL=https://app1-api.novatratech.com
+DATABASE_URL=postgresql://postgres:pass@app1-api.novatratech.com:5434/postgres
+
+# NEW (pointing to Supabase Cloud)
+NEXT_PUBLIC_SUPABASE_URL=https://abc123.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=<new-anon-key>
+DATABASE_URL=postgresql://postgres:<new-pass>@db.abc123.supabase.co:5432/postgres
+```
+
+3. Click "Save"
+4. Trigger redeploy:
 
 ```bash
-# 1. List schemas
-pnpm db:list-schemas
+# From local machine
+vercel --prod
 
-# Expected output:
-# Schemas in database:
-# - app1_novatratech_com
-
-# 2. Open Drizzle Studio
-DB_SCHEMA=app1_novatratech_com pnpm db:studio
-# Should show: users, tasks, profiles tables
+# Or in Vercel Dashboard: Deployments → Redeploy
 ```
+
+#### Step 5: Verify Migration
+
+1. **Test authentication:**
+   - Log in with existing user
+   - Verify dashboard access
+   - Check data appears correctly
+
+2. **Test new signups:**
+   - Create new account
+   - Verify email delivery
+   - Check user appears in Supabase dashboard
+
+3. **Test data operations:**
+   - Create new task
+   - Edit task
+   - Delete task
+   - Verify RLS policies working
+
+4. **Monitor for 24-48 hours:**
+   - Check Vercel logs for errors
+   - Check Supabase logs
+   - Monitor performance metrics
+
+#### Step 6: Clean Up TrueNAS Instance (Optional)
+
+**After verifying migration is successful:**
+
+```bash
+# SSH into TrueNAS
+ssh admin@your-truenas-ip
+
+# Stop app1 Supabase instance
+cd /mnt/pool1/supabase/app1
+docker compose down
+
+# Optional: Remove data (be SURE migration is verified!)
+# rm -rf /mnt/pool1/supabase/app1
+```
+
+**Keep the backup for 30 days before deletion.**
+
+### Migration Rollback Plan
+
+If issues arise during migration:
+
+```bash
+# In Vercel Dashboard: Revert environment variables
+# Trigger redeployment
+
+# Or: Instant rollback to previous deployment
+# Vercel Dashboard → Deployments → Previous deployment → Promote to Production
+```
+
+Your app is back on TrueNAS within seconds!
 
 ---
 
-## Section 5: Vercel Template Project Setup
-
-### Import Repository
-
-```bash
-# 1. Go to https://vercel.com/new
-# 2. Choose "Import Git Repository"
-# 3. Select "msundin/saas-template"
-# 4. Click "Import"
-```
-
-### Configure Build Settings
-
-```bash
-# Project Settings:
-# - Name: "saas-template"
-# - Framework Preset: Next.js (auto-detected)
-# - Root Directory: ./
-# - Build Command: pnpm build (auto-detected)
-# - Output Directory: .next (auto-detected)
-# - Install Command: pnpm install (auto-detected)
-
-# Click "Deploy" (will fail initially, we'll add env vars next)
-```
-
-### Add Domains Manually
-
-**Why manual?** infswsol.com apex points to home server, so we can't use wildcard.
-
-```bash
-# 1. Go to Project Settings > Domains
-# 2. Add "template.infswsol.com"
-#    - Type: Custom Domain
-#    - Git Branch: main
-#    - Click "Add"
-# 3. Add "demo.infswsol.com"
-#    - Type: Custom Domain
-#    - Git Branch: demo
-#    - Click "Add"
-```
-
-**Vercel will show DNS instructions:**
-
-```
-template.infswsol.com needs CNAME record:
-CNAME → cname.vercel-dns.com
-
-demo.infswsol.com needs CNAME record:
-CNAME → cname.vercel-dns.com
-```
-
-We'll configure DNS in Section 7.
-
-### Configure Branch-Specific Environment Variables
-
-**For main branch (template.infswsol.com):**
-
-```bash
-# 1. Go to Project Settings > Environment Variables
-# 2. Add each variable below:
-# 3. Select "Production" (main branch)
-# 4. Click "Save"
-
-# Supabase Project #1 credentials
-NEXT_PUBLIC_SUPABASE_URL=https://xxxxx.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGci... (from Project #1)
-
-# Database URL with schema in search_path
-DATABASE_URL=postgresql://postgres.[project-ref]:[password]@aws-0-us-west-1.pooler.supabase.com:6543/postgres?options=-c%20search_path%3Dtemplate_infswsol_com
-
-# Schema name
-DB_SCHEMA=template_infswsol_com
-
-# App URL
-NEXT_PUBLIC_APP_URL=https://template.infswsol.com
-
-# SEO protection (block search engines)
-NEXT_PUBLIC_ALLOW_INDEXING=false
-```
-
-**For demo branch (demo.infswsol.com):**
-
-```bash
-# 1. Go to Project Settings > Environment Variables
-# 2. Add each variable below:
-# 3. Select "Preview" and specify "demo" branch
-# 4. Click "Save"
-
-# Supabase Project #1 credentials (SAME as main)
-NEXT_PUBLIC_SUPABASE_URL=https://xxxxx.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGci... (from Project #1)
-
-# Database URL with DIFFERENT schema
-DATABASE_URL=postgresql://postgres.[project-ref]:[password]@aws-0-us-west-1.pooler.supabase.com:6543/postgres?options=-c%20search_path%3Ddemo_infswsol_com
-
-# Schema name (DIFFERENT from main)
-DB_SCHEMA=demo_infswsol_com
-
-# App URL
-NEXT_PUBLIC_APP_URL=https://demo.infswsol.com
-
-# SEO protection (block search engines)
-NEXT_PUBLIC_ALLOW_INDEXING=false
-```
-
-### Enable Auto-Deploy
-
-```bash
-# 1. Go to Project Settings > Git
-# 2. Verify "Production Branch": main
-# 3. Verify "Preview Deployments" enabled
-# 4. Add "demo" branch to preview deployments if needed
-
-# Now:
-# - Push to main → deploys to template.infswsol.com
-# - Push to demo → deploys to demo.infswsol.com
-```
-
----
-
-## Section 6: Vercel Production App Projects
-
-### One Vercel Project Per Production App
-
-**Strategy:** Each production app = separate GitHub repo = separate Vercel project
-
-**Why?**
-- Independent deployments
-- Separate environment variables
-- Isolated logs and analytics
-- Clean separation of concerns
-
-### Creating First Production App
-
-**Step 1: Create GitHub Repository** (covered in Section 9)
-
-**Step 2: Import to Vercel**
-
-```bash
-# 1. Go to https://vercel.com/new
-# 2. Choose "Import Git Repository"
-# 3. Select "msundin/app1"
-# 4. Click "Import"
-
-# Project Settings:
-# - Name: "app1"
-# - Framework Preset: Next.js (auto-detected)
-# - Leave other settings as default
-```
-
-**Step 3: Add novatratech.com Apex Domain**
-
-```bash
-# 1. Go to Project Settings > Domains
-# 2. Add "novatratech.com" (apex domain)
-#    - Type: Custom Domain
-#    - Git Branch: main
-#    - Click "Add"
-
-# Vercel will show:
-# "Add these DNS records to novatratech.com:"
-# A record → 76.76.21.21
-# A record → 76.76.21.22
-```
-
-**Why apex?** This unlocks wildcard DNS, making ALL subdomains automatically available.
-
-**Step 4: Add app1.novatratech.com Subdomain**
-
-```bash
-# 1. Still in Project Settings > Domains
-# 2. Add "app1.novatratech.com"
-#    - Type: Custom Domain
-#    - Git Branch: main
-#    - Click "Add"
-
-# Vercel will show:
-# "This subdomain is automatically available via apex wildcard"
-# Status: Ready (no additional DNS needed)
-```
-
-**Step 5: Configure Environment Variables**
-
-```bash
-# Go to Project Settings > Environment Variables
-
-# Supabase Project #2 credentials
-NEXT_PUBLIC_SUPABASE_URL=https://yyyyy.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGci... (from Project #2)
-
-# Database URL with app1 schema
-DATABASE_URL=postgresql://postgres.[project-ref-2]:[password]@aws-0-us-west-1.pooler.supabase.com:6543/postgres?options=-c%20search_path%3Dapp1_novatratech_com
-
-# Schema name
-DB_SCHEMA=app1_novatratech_com
-
-# App URL
-NEXT_PUBLIC_APP_URL=https://app1.novatratech.com
-
-# SEO protection (allow indexing for production)
-NEXT_PUBLIC_ALLOW_INDEXING=true
-```
-
-**Step 6: Deploy**
-
-```bash
-# Push to main branch
-git checkout main
-git push origin main
-
-# Vercel auto-deploys to app1.novatratech.com
-# Check deployment at https://vercel.com/msundin/app1
-```
-
----
-
-## Section 7: DNS Configuration
-
-### infswsol.com (Manual Subdomains)
-
-**Constraint:** Apex domain points to home server, cannot use wildcard.
-
-**DNS Records to Add:**
-
-```dns
-# Template subdomain
-template.infswsol.com    CNAME    cname.vercel-dns.com
-
-# Demo subdomain
-demo.infswsol.com        CNAME    cname.vercel-dns.com
-```
-
-**Verification:**
-
-```bash
-# Wait 5-60 minutes for DNS propagation
-
-# Check DNS resolution
-dig template.infswsol.com
-# Should show CNAME → cname.vercel-dns.com
-
-dig demo.infswsol.com
-# Should show CNAME → cname.vercel-dns.com
-
-# Check HTTPS
-curl -I https://template.infswsol.com
-# Should return 200 OK with Vercel headers
-```
-
-### novatratech.com (Apex + Wildcard)
-
-**Strategy:** Point apex to Vercel, enable wildcard for ALL subdomains.
-
-**DNS Records to Add:**
-
-```dns
-# Apex domain (enables wildcard)
-novatratech.com          A        76.76.21.21
-novatratech.com          A        76.76.21.22
-
-# Wildcard for ALL subdomains
-*.novatratech.com        CNAME    cname.vercel-dns.com
-```
-
-**Verification:**
-
-```bash
-# Wait 5-60 minutes for DNS propagation
-
-# Check apex resolution
-dig novatratech.com
-# Should show A records: 76.76.21.21, 76.76.21.22
-
-# Check wildcard resolution
-dig app1.novatratech.com
-# Should show CNAME → cname.vercel-dns.com
-
-dig app2.novatratech.com
-# Should show CNAME → cname.vercel-dns.com
-
-# Check HTTPS
-curl -I https://app1.novatratech.com
-# Should return 200 OK with Vercel headers
-```
-
-### SSL Certificates
-
-**Automatic:** Vercel automatically provisions SSL certificates via Let's Encrypt.
-
-```bash
-# 1. Once DNS is configured and verified
-# 2. Vercel automatically requests SSL certificate
-# 3. Certificate provisioning takes ~1-5 minutes
-# 4. Status visible in Vercel dashboard > Domains
-
-# Check SSL status:
-# Go to https://vercel.com/msundin/saas-template/settings/domains
-# Each domain should show "✓ Active" with padlock icon
-```
-
----
-
-## Section 8: Environment Variables (Schema-Specific)
-
-### Template - main branch (template.infswsol.com)
-
-```bash
-# Supabase Project #1 (infswsol.com apps)
-NEXT_PUBLIC_SUPABASE_URL=https://xxxxx.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGci...
-
-# Database URL with schema in search_path
-DATABASE_URL=postgresql://postgres.[project-ref]:[password]@aws-0-us-west-1.pooler.supabase.com:6543/postgres?options=-c%20search_path%3Dtemplate_infswsol_com
-
-# Schema name (for Drizzle)
-DB_SCHEMA=template_infswsol_com
-
-# App URL (for redirects, emails, etc.)
-NEXT_PUBLIC_APP_URL=https://template.infswsol.com
-
-# Search Engine Indexing (false = block search engines)
-NEXT_PUBLIC_ALLOW_INDEXING=false
-```
-
-**Where to set:** Vercel > saas-template > Settings > Environment Variables > Production
-
-### Template - demo branch (demo.infswsol.com)
-
-```bash
-# Supabase Project #1 (same as main, different schema)
-NEXT_PUBLIC_SUPABASE_URL=https://xxxxx.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGci...
-
-# Database URL with DIFFERENT schema
-DATABASE_URL=postgresql://postgres.[project-ref]:[password]@aws-0-us-west-1.pooler.supabase.com:6543/postgres?options=-c%20search_path%3Ddemo_infswsol_com
-
-# Schema name (DIFFERENT from main)
-DB_SCHEMA=demo_infswsol_com
-
-# App URL
-NEXT_PUBLIC_APP_URL=https://demo.infswsol.com
-
-# Search Engine Indexing (false = block search engines)
-NEXT_PUBLIC_ALLOW_INDEXING=false
-```
-
-**Where to set:** Vercel > saas-template > Settings > Environment Variables > Preview (select demo branch)
-
-### Production App1 (app1.novatratech.com)
-
-```bash
-# Supabase Project #2 (novatratech.com apps)
-NEXT_PUBLIC_SUPABASE_URL=https://yyyyy.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGci...
-
-# Database URL with app1 schema
-DATABASE_URL=postgresql://postgres.[project-ref-2]:[password]@aws-0-us-west-1.pooler.supabase.com:6543/postgres?options=-c%20search_path%3Dapp1_novatratech_com
-
-# Schema name
-DB_SCHEMA=app1_novatratech_com
-
-# App URL
-NEXT_PUBLIC_APP_URL=https://app1.novatratech.com
-
-# Search Engine Indexing (true = allow search engines)
-NEXT_PUBLIC_ALLOW_INDEXING=true
-```
-
-**Where to set:** Vercel > app1 > Settings > Environment Variables > Production
+## Environment Configuration
 
 ### Local Development (.env.local)
 
-```bash
-# Local Supabase (NO DB_SCHEMA needed)
-NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321
-NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGci... (from local Supabase)
+```env
+# Local Supabase (Docker)
+NEXT_PUBLIC_SUPABASE_URL=http://localhost:54321
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+DATABASE_URL=postgresql://postgres:postgres@localhost:54322/postgres
 
-# Local Database (uses 'public' schema by default)
-DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres
-
-# App URL
-NEXT_PUBLIC_APP_URL=http://localhost:3000
-
-# Search Engine Indexing (doesn't matter for local)
-NEXT_PUBLIC_ALLOW_INDEXING=false
+# Development mode
+NODE_ENV=development
 ```
 
-**Note:** Local development doesn't need `DB_SCHEMA` because it uses the default `public` schema.
+### Bootstrap / Self-Hosted (Vercel Environment Variables)
+
+**Demo:**
+```env
+NEXT_PUBLIC_SUPABASE_URL=https://demo-api.infswsol.com
+NEXT_PUBLIC_SUPABASE_ANON_KEY=<truenas-demo-anon-key>
+DATABASE_URL=postgresql://postgres:<pass>@demo-api.infswsol.com:5432/postgres
+NODE_ENV=production
+NEXT_PUBLIC_ROBOTS=noindex
+```
+
+**Template:**
+```env
+NEXT_PUBLIC_SUPABASE_URL=https://template-api.infswsol.com
+NEXT_PUBLIC_SUPABASE_ANON_KEY=<truenas-template-anon-key>
+DATABASE_URL=postgresql://postgres:<pass>@template-api.infswsol.com:5433/postgres
+NODE_ENV=production
+NEXT_PUBLIC_ROBOTS=noindex
+```
+
+### Production / Cloud (Vercel Environment Variables)
+
+**App1 (migrated to Supabase Cloud):**
+```env
+NEXT_PUBLIC_SUPABASE_URL=https://abc123.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=<supabase-cloud-anon-key>
+DATABASE_URL=postgresql://postgres:<pass>@db.abc123.supabase.co:5432/postgres
+NODE_ENV=production
+# No NEXT_PUBLIC_ROBOTS (allow indexing)
+```
 
 ---
 
-## Section 9: Creating New Production App from Template
+## OAuth Setup
 
-### Complete Workflow
+### Google OAuth (Example)
+
+**One-time setup in Google Cloud Console, then reuse credentials:**
+
+#### 1. Create OAuth App (Once)
+
+1. Go to: https://console.cloud.google.com
+2. Create project: "SaaS Template Auth"
+3. Enable Google+ API
+4. Go to: Credentials → Create Credentials → OAuth Client ID
+5. Application type: Web application
+6. Name: "SaaS Template"
+7. Authorized redirect URIs:
+
+```
+# Local Development
+http://localhost:54321/auth/v1/callback
+
+# Bootstrap (TrueNAS)
+https://demo-api.infswsol.com/auth/v1/callback
+https://template-api.infswsol.com/auth/v1/callback
+https://app1-api.novatratech.com/auth/v1/callback
+
+# Production (Supabase Cloud) - Add when migrating
+https://abc123.supabase.co/auth/v1/callback
+```
+
+8. Save credentials:
+   - Client ID: `123456789.apps.googleusercontent.com`
+   - Client Secret: `GOCSPX-abc123...`
+
+#### 2. Configure in Each Supabase Instance
+
+**For TrueNAS instances:**
+
+1. Open Supabase Studio: `http://your-truenas-ip:3000`
+2. Go to: Authentication → Providers → Google
+3. Enable Google provider
+4. Enter Client ID and Client Secret (same credentials for all)
+5. Save
+
+**For Supabase Cloud (after migration):**
+
+1. Go to: https://supabase.com → Your Project
+2. Settings → Authentication → Providers → Google
+3. Enter Client ID and Client Secret (same credentials!)
+4. Save
+
+#### 3. Add Sign-In Button to Your App
+
+**The code is already in the template!**
+
+```typescript
+// src/features/auth/components/SignInWithGoogle.tsx
+import { createClient } from '@/lib/supabase/client'
+
+export function SignInWithGoogle() {
+  const handleGoogleSignIn = async () => {
+    const supabase = createClient()
+    await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`
+      }
+    })
+  }
+
+  return (
+    <button onClick={handleGoogleSignIn}>
+      Sign in with Google
+    </button>
+  )
+}
+```
+
+**This exact code works for:**
+- ✅ Local development
+- ✅ TrueNAS self-hosted
+- ✅ Supabase Cloud
+- ✅ No environment-specific changes needed!
+
+### GitHub OAuth (Example)
+
+**Similar process:**
+
+1. Go to: https://github.com/settings/developers
+2. New OAuth App
+3. Application name: "SaaS Template"
+4. Homepage URL: `https://template.infswsol.com`
+5. Authorization callback URLs:
+
+```
+http://localhost:54321/auth/v1/callback
+https://demo-api.infswsol.com/auth/v1/callback
+https://template-api.infswsol.com/auth/v1/callback
+https://app1-api.novatratech.com/auth/v1/callback
+```
+
+6. Save Client ID and Client Secret
+7. Add to each Supabase instance (same credentials everywhere)
+
+### OAuth Pattern Reuse
+
+**When cloning template to new app:**
+
+1. Clone repository: `git clone template-repo new-app`
+2. OAuth code already exists in `src/features/auth/components/`
+3. Just add new redirect URL to existing OAuth app in Google/GitHub
+4. Configure in new Supabase instance with same credentials
+5. **Done!** ~5 minutes per new app
+
+---
+
+## Backup Strategy
+
+### Three-Layer Backup Approach
+
+#### Layer 1: ZFS Snapshots (Instant Recovery)
+
+**TrueNAS automatic snapshots:**
+- Frequency: Every 4 hours, plus daily snapshot
+- Retention: 7 days for 4-hour snapshots, 30 days for daily
+- Recovery time: < 1 minute
+
+**Restore from snapshot:**
 
 ```bash
-# ========================================
-# STEP 1: Create New GitHub Repository
-# ========================================
+# List snapshots
+zfs list -t snapshot -r pool1/supabase
 
-# Clone template to new repo
-gh repo create msundin/app1 --template msundin/saas-template --private
+# Rollback to specific snapshot
+zfs rollback pool1/supabase/app1@daily-2025-10-30
+```
 
-# Clone locally
-git clone https://github.com/msundin/app1.git
-cd app1
+#### Layer 2: PostgreSQL Dumps (Portable Backups)
 
+**Automated daily dumps:**
+- Script runs at 2 AM daily (cron job)
+- Exports each database to `.sql` file
+- Stored in `/mnt/pool1/backups/supabase`
+- Retention: 30 days local
 
-# ========================================
-# STEP 2: Update CLAUDE.md Immediately
-# ========================================
+**Manual backup:**
 
-# Edit .claude/CLAUDE.md
-# Update first lines to:
-# App1 - Production Application
-#
-# ⚠️ IMPORTANT: This is app1, NOT the template!
-#
-# Forked from: saas-template
-# Domain: app1.novatratech.com
-# Supabase: Project #2, Schema: app1_novatratech_com
+```bash
+# Backup specific instance
+docker exec supabase-db-app1 pg_dump -U postgres \
+    > app1-backup-$(date +%Y%m%d).sql
 
+# Backup with compression
+docker exec supabase-db-app1 pg_dump -U postgres | gzip \
+    > app1-backup-$(date +%Y%m%d).sql.gz
+```
 
-# ========================================
-# STEP 3: Setup Local Development
-# ========================================
+**Restore from dump:**
 
-# Create develop branch
-git checkout -b develop
+```bash
+# Restore to same instance
+docker exec -i supabase-db-app1 psql -U postgres < app1-backup-20251030.sql
 
-# Install dependencies
-pnpm install
+# Restore to new instance
+psql -h new-server -U postgres -d postgres < app1-backup-20251030.sql
+```
 
-# Start local Supabase
-pnpm supabase start
+#### Layer 3: Cloud Storage (Disaster Recovery)
 
-# Get local credentials
-pnpm supabase status
-# Copy API URL and anon key
+**Backblaze B2 (Free tier: 10GB):**
+- Automated sync via rclone
+- Runs after daily database dump
+- Encrypted at rest
+- Geographic redundancy
 
-# Setup environment
-cp .env.example .env.local
+**Configure cloud backup:**
 
-# Edit .env.local with local credentials
-# (same as current template local setup)
+```bash
+# Configure rclone (one-time)
+rclone config
 
-# Run migrations locally
-pnpm db:push
+# Test upload
+rclone copy /mnt/pool1/backups/supabase backblaze:saas-backups/
 
-# Start development server
-pnpm dev
-# Open http://localhost:3000
+# Verify
+rclone ls backblaze:saas-backups/supabase
 
+# Add to cron (already in backup script)
+```
 
-# ========================================
-# STEP 4: Remove Template Example (Optional)
-# ========================================
+**Recovery from cloud:**
 
-# Remove tasks feature if not needed
-rm -rf src/features/tasks
+```bash
+# List available backups
+rclone ls backblaze:saas-backups/supabase
 
-# Update dashboard page to remove task components
-# (Or keep as reference)
+# Download specific backup
+rclone copy backblaze:saas-backups/supabase/app1_20251030.sql.gz ./
 
-# Commit changes
-git add .
-git commit -m "Initial setup: Remove template example feature"
+# Extract and restore
+gunzip app1_20251030.sql.gz
+psql -h your-server < app1_20251030.sql
+```
 
+### Backup Testing
 
-# ========================================
-# STEP 5: Create Schema in Supabase Project #2
-# ========================================
+**Test backups monthly:**
 
-# Get Project #2 database URL
-DATABASE_URL_PROJECT2="postgresql://postgres.[project-ref-2]:[password]@aws-0-us-west-1.pooler.supabase.com:5432/postgres"
+```bash
+# 1. Create test Supabase instance
+cd /mnt/pool1/supabase/test
+docker compose up -d
 
-# Create app1 schema
-psql "$DATABASE_URL_PROJECT2" -c "CREATE SCHEMA IF NOT EXISTS app1_novatratech_com;"
+# 2. Restore latest backup
+docker exec -i supabase-db-test psql -U postgres \
+    < /mnt/pool1/backups/supabase/app1_latest.sql
 
-# Run migrations for app1 schema
-export DATABASE_URL="$DATABASE_URL_PROJECT2"
-export DB_SCHEMA=app1_novatratech_com
-pnpm db:push
+# 3. Verify data
+docker exec supabase-db-test psql -U postgres \
+    -c "SELECT count(*) FROM auth.users;"
 
-# Verify tables created
-DB_SCHEMA=app1_novatratech_com pnpm db:studio
+# 4. Clean up
+docker compose down
+rm -rf /mnt/pool1/supabase/test
+```
 
+**Document results in backup log.**
 
-# ========================================
-# STEP 6: Create Vercel Project
-# ========================================
+---
 
-# Via Web UI (easier):
-# 1. Go to https://vercel.com/new
-# 2. Import "msundin/app1"
-# 3. Add domain: app1.novatratech.com
-# 4. Configure environment variables (see Section 8)
+## Troubleshooting
 
-# Via CLI:
-pnpm vercel
-# Follow prompts
+### Issue: Cannot Connect to TrueNAS Supabase
 
+**Symptoms:**
+- Vercel deployment shows "Failed to connect to database"
+- `ECONNREFUSED` errors in logs
 
-# ========================================
-# STEP 7: Deploy to Production
-# ========================================
+**Solutions:**
 
-# Merge develop to main
-git checkout main
-git merge develop
+1. **Verify Supabase is running:**
 
-# Push to GitHub (triggers Vercel deployment)
-git push origin main
+```bash
+ssh admin@your-truenas-ip
+docker ps | grep supabase
+# Should see all supabase containers running
+```
 
-# Monitor deployment
-# Check https://vercel.com/msundin/app1
+2. **Check Cloudflare Tunnel status:**
 
-# Verify deployment
-curl -I https://app1.novatratech.com
+```bash
+sudo systemctl status cloudflared
+# Should be active (running)
+
+# Check tunnel connectivity
+cloudflared tunnel list
+```
+
+3. **Verify port forwarding (if using DDNS):**
+
+Test from external network:
+
+```bash
+curl https://demo-api.infswsol.com/health
 # Should return 200 OK
-
-
-# ========================================
-# DONE! 🎉
-# ========================================
 ```
+
+4. **Check firewall rules:**
+
+```bash
+# TrueNAS firewall
+sudo ufw status
+# Ensure ports 8000, 8001, 8002, etc. are allowed
+```
+
+5. **Verify environment variables in Vercel:**
+
+Vercel Dashboard → Project → Settings → Environment Variables
+
+Ensure `NEXT_PUBLIC_SUPABASE_URL` matches your tunnel/DDNS URL exactly.
+
+### Issue: Authentication Not Working
+
+**Symptoms:**
+- "Invalid JWT" errors
+- Cannot log in even with correct credentials
+- Sessions expire immediately
+
+**Solutions:**
+
+1. **Verify JWT secret matches:**
+
+```bash
+# On TrueNAS, check JWT secret
+cat /mnt/pool1/supabase/demo/.env | grep JWT_SECRET
+
+# Ensure this matches the SUPABASE_ANON_KEY in Vercel
+```
+
+2. **Check redirect URL configuration:**
+
+Supabase Studio → Authentication → URL Configuration:
+- Site URL: `https://demo.infswsol.com`
+- Redirect URLs: `https://demo.infswsol.com/**`
+
+3. **Verify callback route exists:**
+
+```bash
+# Check file exists
+ls src/app/auth/callback/route.ts
+# Should exist from template
+```
+
+4. **Check CORS settings:**
+
+Supabase Studio → Settings → API → CORS:
+- Add your Vercel domain: `https://demo.infswsol.com`
+
+### Issue: Database Migration Failed
+
+**Symptoms:**
+- Import to Supabase Cloud shows errors
+- Missing tables or data after migration
+
+**Solutions:**
+
+1. **Check for schema conflicts:**
+
+```bash
+# Before import, check target database is clean
+psql "$CLOUD_DB_URL" -c "\dt"
+# Should show minimal tables (Supabase defaults)
+```
+
+2. **Use `--clean --if-exists` flags:**
+
+```bash
+pg_dump --clean --if-exists ... > backup.sql
+# This handles existing objects gracefully
+```
+
+3. **Import in sections if needed:**
+
+```bash
+# Schema only first
+pg_dump --schema-only ... > schema.sql
+psql "$CLOUD_DB_URL" < schema.sql
+
+# Then data
+pg_dump --data-only ... > data.sql
+psql "$CLOUD_DB_URL" < data.sql
+```
+
+4. **Check for RLS policy conflicts:**
+
+After import, verify policies:
+
+```sql
+SELECT schemaname, tablename, policyname
+FROM pg_policies
+WHERE schemaname = 'public';
+```
+
+### Issue: Performance is Slow
+
+**Symptoms:**
+- Page load times >3 seconds
+- API requests timing out
+- Database queries slow
+
+**Solutions:**
+
+1. **Check home internet speed:**
+
+```bash
+# On TrueNAS
+speedtest-cli
+# Upload speed should be >50 Mbps for good performance
+```
+
+2. **Enable database connection pooling:**
+
+Add to Vercel environment variables:
+
+```env
+DATABASE_URL=postgresql://postgres:pass@...?pgbouncer=true&connection_limit=10
+```
+
+3. **Optimize database:**
+
+```sql
+-- Run on TrueNAS Supabase
+VACUUM ANALYZE;
+REINDEX DATABASE postgres;
+```
+
+4. **Check container resources:**
+
+```bash
+docker stats
+# Ensure Supabase containers aren't hitting resource limits
+```
+
+5. **Consider migration to cloud:**
+
+If consistent slow performance, may be time to migrate to Supabase Cloud for global edge network.
+
+### Issue: Deployment Fails on Vercel
+
+**Symptoms:**
+- Build errors during deployment
+- Environment variable issues
+
+**Solutions:**
+
+1. **Check build logs:**
+
+Vercel Dashboard → Deployments → Failed deployment → View logs
+
+2. **Verify environment variables are set:**
+
+```bash
+# All deployments need these:
+NEXT_PUBLIC_SUPABASE_URL
+NEXT_PUBLIC_SUPABASE_ANON_KEY
+DATABASE_URL
+```
+
+3. **Test build locally:**
+
+```bash
+# With production environment
+cp .env.production .env.local
+pnpm build
+# Should complete without errors
+```
+
+4. **Clear Vercel cache:**
+
+Vercel Dashboard → Settings → Clear Build Cache
+
+Then redeploy.
+
+### Getting Help
+
+**TrueNAS Community:**
+- Forum: https://forums.truenas.com/
+- Discord: https://discord.gg/truenas
+
+**Supabase Community:**
+- Discord: https://discord.supabase.com/
+- GitHub Discussions: https://github.com/orgs/supabase/discussions
+
+**This Repository:**
+- Open issue: https://github.com/your-org/saas-template/issues
+- Check existing issues for solutions
 
 ---
 
-## Section 10: Safe Database Operations
+## Cost Analysis
 
-### Always with Schema Context
+### Bootstrap Phase (0-2 successful apps)
 
-**RULE:** Cloud database operations require `DB_SCHEMA` environment variable.
+```
+Infrastructure:
+  Vercel Free Tier:          $0/month
+  TrueNAS Supabase × 20:     $0/month (already own hardware)
+  Cloudflare Tunnel:         $0/month
+  Backblaze B2 (10GB):       $0/month
 
-```bash
-# ✅ SAFE - Targets specific schema
-DB_SCHEMA=template_infswsol_com pnpm db:push
-DB_SCHEMA=demo_infswsol_com pnpm db:generate
-DB_SCHEMA=app1_novatratech_com pnpm db:studio
+Ongoing:
+  Electricity (~50W):        ~$5/month
+  Internet (existing):       $0 (already paying)
 
-# ❌ DANGEROUS - Will error (safety script prevents this)
-pnpm db:push
-# Output: ❌ ERROR: DB_SCHEMA environment variable required!
+Total: $5/month for unlimited apps
 ```
 
-### Schema-Specific Operations
+### Hybrid Phase (2-5 successful apps)
 
-**Generate Migrations:**
+```
+Infrastructure:
+  Vercel Free:               $0/month (free tier)
+  TrueNAS Supabase × 15:     $0/month (testing/staging)
+  Supabase Cloud × 2:        $50/month (successful apps)
+  Cloudflare Tunnel:         $0/month
 
-```bash
-# For template schema
-DB_SCHEMA=template_infswsol_com pnpm db:generate
-
-# For demo schema
-DB_SCHEMA=demo_infswsol_com pnpm db:generate
-
-# For production app schema
-DB_SCHEMA=app1_novatratech_com pnpm db:generate
+Total: $50/month
+  Per successful app: $25/month
+  Testing apps: Free
 ```
 
-**Push Migrations:**
+### Growth Phase (5-10 successful apps)
 
-```bash
-# For template schema
-DB_SCHEMA=template_infswsol_com pnpm db:push
+```
+Infrastructure:
+  Vercel Pro:                $20/month (better perf)
+  TrueNAS Supabase × 10:     $0/month (testing/staging)
+  Supabase Cloud × 5:        $125/month (successful apps)
+  Cloudflare:                $0/month
 
-# For demo schema
-DB_SCHEMA=demo_infswsol_com pnpm db:push
-
-# For production app schema
-DB_SCHEMA=app1_novatratech_com pnpm db:push
+Total: $145/month
+  Per successful app: $29/month average
+  Testing apps: Still free!
 ```
 
-**Open Drizzle Studio:**
+### Comparison: Cloud-Only Approach
 
-```bash
-# For template schema
-DB_SCHEMA=template_infswsol_com pnpm db:studio
-# Opens studio at https://local.drizzle.studio
-# Shows ONLY template_infswsol_com tables
+```
+Same scenario (5 successful apps):
+  Vercel Pro:                $20/month
+  Supabase Cloud × 15:       $375/month (all apps, no free testing)
 
-# For demo schema
-DB_SCHEMA=demo_infswsol_com pnpm db:studio
-# Shows ONLY demo_infswsol_com tables
+Total: $395/month
+
+Savings with hybrid: $250/month ($3,000/year)
 ```
 
-### Resetting Schema Safely
+### ROI Calculation
 
-**Use `pnpm db:reset-schema` (requires confirmation):**
+**Scenario:** You test 20 SaaS ideas. 2 gain traction (10% success rate).
 
-```bash
-# Reset demo data (safe, template unaffected)
-DB_SCHEMA=demo_infswsol_com pnpm db:reset-schema
-
-# Output:
-# ⚠️  WARNING: This will DELETE ALL DATA in schema: demo_infswsol_com
-# This action cannot be undone!
-#
-# Type the schema name "demo_infswsol_com" to confirm:
-
-# Type exact schema name
-demo_infswsol_com
-
-# Output:
-# Dropping schema demo_infswsol_com...
-# Recreating schema demo_infswsol_com...
-# ✅ Schema reset complete!
+**Hybrid Bootstrap Approach:**
+```
+Year 1 costs:
+  Months 1-6 (testing): $5/mo × 6 = $30
+  Months 7-12 (2 successful): $50/mo × 6 = $300
+  Total Year 1: $330
 ```
 
-### Listing Schemas
-
-**See all schemas in database:**
-
-```bash
-pnpm db:list-schemas
-
-# Output:
-# Schemas in database:
-# - template_infswsol_com
-# - demo_infswsol_com
-# - app1_novatratech_com
-# - app2_novatratech_com
+**Cloud-Only Approach:**
+```
+Year 1 costs:
+  All 12 months: $395/mo × 12 = $4,740
+  Total Year 1: $4,740
 ```
 
-### Local Development (No Schema Required)
-
-**Local uses 'public' schema by default:**
-
-```bash
-# Local database operations (no DB_SCHEMA needed)
-pnpm dev
-pnpm db:push
-pnpm db:studio
-
-# .env.local (no DB_SCHEMA)
-DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres
-```
+**Savings: $4,410 in first year** 💰
 
 ---
 
-## Section 11: Branch Workflows
+## Best Practices
 
-### Template Repository
+### Security
 
-**Branches:**
-- `develop` - Local development only (not deployed)
-- `main` - Deployed to template.infswsol.com
-- `demo` - Deployed to demo.infswsol.com
+1. **Never commit secrets:**
+   - Keep `.env.local` in `.gitignore`
+   - Use Vercel environment variables for production
+   - Rotate JWT secrets annually
 
-**Daily Work (Local):**
+2. **Use strong passwords:**
+   - PostgreSQL: 32+ character random
+   - Supabase JWT: 64+ character random
+   - Generate with: `openssl rand -base64 64`
 
-```bash
-# Work on develop branch locally
-git checkout develop
-pnpm dev
+3. **Keep TrueNAS secure:**
+   - Enable SSH key authentication only
+   - Disable password authentication
+   - Keep system updated: `apt update && apt upgrade`
+   - Enable firewall: `ufw enable`
 
-# Make changes, write tests, commit
-git add .
-git commit -m "Add new feature"
-```
+4. **Monitor access logs:**
+   - Check Supabase Studio logs regularly
+   - Review Vercel access logs
+   - Set up alerts for suspicious activity
 
-**Deploy Reference Template:**
+### Performance
 
-```bash
-# Merge to main when ready
-git checkout main
-git merge develop
+1. **Database indexing:**
+   - Add indexes on frequently queried columns
+   - Run `EXPLAIN ANALYZE` on slow queries
+   - Optimize based on results
 
-# Push to GitHub (triggers Vercel deployment)
-git push origin main
+2. **Connection pooling:**
+   - Use PgBouncer for high-traffic apps
+   - Set appropriate `connection_limit`
+   - Monitor connection usage
 
-# Vercel auto-deploys to template.infswsol.com
-# Uses schema: template_infswsol_com
-```
+3. **Caching:**
+   - Use Next.js static generation where possible
+   - Implement API response caching
+   - Cache database queries in Redis (if needed)
 
-**Update Client Demo:**
+4. **Monitoring:**
+   - Set up Vercel Analytics
+   - Monitor Supabase performance metrics
+   - Track error rates and slow queries
 
-```bash
-# Cherry-pick specific features for demo
-git checkout demo
-git cherry-pick [commit-hash]
+### Maintenance
 
-# Or merge from develop
-git merge develop
+1. **Regular updates:**
+   - Update Supabase Docker images monthly
+   - Keep Next.js and dependencies current
+   - Test updates in staging first
 
-# Push to GitHub
-git push origin demo
+2. **Backup verification:**
+   - Test restore monthly
+   - Verify cloud backup sync
+   - Document restore procedures
 
-# Vercel auto-deploys to demo.infswsol.com
-# Uses schema: demo_infswsol_com (separate data!)
-```
+3. **Health checks:**
+   - Set up uptime monitoring (UptimeRobot free tier)
+   - Monitor disk space on TrueNAS
+   - Check Docker container health
 
-### Production App Repository
-
-**Branches:**
-- `develop` - Local development only (not deployed)
-- `main` - Deployed to app1.novatratech.com
-
-**Daily Work (Local):**
-
-```bash
-# Work on develop branch locally
-git checkout develop
-pnpm dev
-
-# Make changes, write tests, commit
-git add .
-git commit -m "Add user profile feature"
-
-# Test locally with local Supabase
-pnpm test
-pnpm validate
-```
-
-**Deploy to Production:**
-
-```bash
-# Merge to main when ready
-git checkout main
-git merge develop
-
-# Push to GitHub (triggers Vercel deployment)
-git push origin main
-
-# Vercel auto-deploys to app1.novatratech.com
-# Uses schema: app1_novatratech_com
-```
+4. **Documentation:**
+   - Document all customizations
+   - Keep runbook updated
+   - Record all migrations and changes
 
 ---
 
-## Section 12: Migrating App to Paid Tier
+## Conclusion
 
-### When to Migrate
+This hybrid bootstrap strategy gives you:
 
-**Triggers:**
-- App approaching 500MB limit
-- App generating revenue (can afford $25/month)
-- Need more features (point-in-time recovery, daily backups)
-- Need dedicated resources
+✅ **Maximum flexibility** - Test unlimited ideas without cost pressure
+✅ **Smooth scaling** - Migrate only successful apps to production infrastructure
+✅ **Cost efficiency** - Save thousands during validation phase
+✅ **Production quality** - Same security and features as cloud deployments
+✅ **No vendor lock-in** - Own your infrastructure, migrate when needed
 
-### Migration Process
+**Next Steps:**
 
-**Step 1: Export Specific Schema**
+1. ✅ Read this guide thoroughly
+2. ✅ Set up TrueNAS Supabase (1-2 hours)
+3. ✅ Deploy first app to Vercel (30 minutes)
+4. ✅ Configure backups (30 minutes)
+5. ✅ Test authentication flow (15 minutes)
+6. ✅ Clone template for next app (15 minutes)
 
-```bash
-# Get current schema data
-DATABASE_URL_PROJECT2="postgresql://postgres.[project-ref-2]:[password]@aws-0-us-west-1.pooler.supabase.com:6543/postgres"
-
-# Export app1 schema only
-pg_dump \
-  --schema=app1_novatratech_com \
-  --format=custom \
-  "$DATABASE_URL_PROJECT2" \
-  > backups/app1_migration_$(date +%Y%m%d).dump
-```
-
-**Step 2: Create New Paid Supabase Project**
-
-```bash
-# 1. Go to https://supabase.com/dashboard
-# 2. Click "New Project"
-# 3. Fill in details:
-#    - Name: "app1-production"
-#    - Pricing Plan: Pro ($25/month)
-# 4. Create project
-```
-
-**Step 3: Import Data**
-
-```bash
-# Get new project database URL
-DATABASE_URL_NEW="postgresql://postgres.[new-project-ref]:[new-password]@aws-0-us-west-1.pooler.supabase.com:5432/postgres"
-
-# Create schema
-psql "$DATABASE_URL_NEW" -c "CREATE SCHEMA IF NOT EXISTS app1_novatratech_com;"
-
-# Import backup
-pg_restore \
-  --schema=app1_novatratech_com \
-  --dbname="$DATABASE_URL_NEW" \
-  backups/app1_migration_YYYYMMDD.dump
-```
-
-**Step 4: Update Vercel Environment Variables**
-
-```bash
-# 1. Go to https://vercel.com/msundin/app1/settings/environment-variables
-# 2. Update with new Supabase Project credentials
-# 3. Redeploy
-```
+**Happy building!** 🚀
 
 ---
 
-## Section 13: SEO Protection
-
-### Why SEO Protection?
-
-**Problem:** Don't want template/demo deployments indexed by Google.
-
-**Solution:** Triple-layer protection to block search engines.
-
-### Layer 1: robots.txt
-
-```typescript
-// app/robots.ts
-import { MetadataRoute } from 'next'
-
-export default function robots(): MetadataRoute.Robots {
-  const allowIndexing = process.env.NEXT_PUBLIC_ALLOW_INDEXING === 'true'
-
-  if (!allowIndexing) {
-    return {
-      rules: { userAgent: '*', disallow: '/' }
-    }
-  }
-
-  return {
-    rules: { userAgent: '*', allow: '/' },
-    sitemap: `${process.env.NEXT_PUBLIC_APP_URL}/sitemap.xml`
-  }
-}
-```
-
-### Layer 2: Meta Tags
-
-```typescript
-// app/layout.tsx
-const allowIndexing = process.env.NEXT_PUBLIC_ALLOW_INDEXING === 'true'
-
-export const metadata: Metadata = {
-  robots: allowIndexing ? 'index, follow' : 'noindex, nofollow'
-}
-```
-
-### Layer 3: X-Robots-Tag Header
-
-```typescript
-// src/middleware.ts
-const allowIndexing = process.env.NEXT_PUBLIC_ALLOW_INDEXING === 'true'
-
-if (!allowIndexing) {
-  response.headers.set('X-Robots-Tag', 'noindex, nofollow')
-}
-```
-
-### Configuration
-
-**Template/Demo (Block Indexing):**
-
-```bash
-NEXT_PUBLIC_ALLOW_INDEXING=false
-```
-
-**Production App (Allow Indexing):**
-
-```bash
-NEXT_PUBLIC_ALLOW_INDEXING=true
-```
-
----
-
-## Section 14: Monitoring & Limits
-
-### Supabase Database Size
-
-**Check Size Per Project:**
-
-```bash
-# Project #1 (infswsol.com apps)
-psql "$DATABASE_URL_PROJECT1" << 'EOF'
-SELECT
-  schemaname,
-  pg_size_pretty(SUM(pg_total_relation_size(schemaname||'.'||tablename))) as size
-FROM pg_tables
-WHERE schemaname IN ('template_infswsol_com', 'demo_infswsol_com')
-GROUP BY schemaname
-ORDER BY schemaname;
-EOF
-
-# Output:
-#       schemaname        |  size
-# ------------------------+--------
-#  demo_infswsol_com      | 100 MB
-#  template_infswsol_com  | 150 MB
-```
-
-### When to Upgrade
-
-**Supabase Free → Pro ($25/month):**
-
-```bash
-# Upgrade when:
-- Database size approaching 500MB
-- App generates >$50/month revenue (2x cost)
-- Need point-in-time recovery
-- Need dedicated resources
-```
-
-**Vercel Free → Pro ($20/month):**
-
-```bash
-# Upgrade when:
-- Bandwidth exceeding 100GB/month
-- Need team collaboration
-- Need organization repositories
-```
-
----
-
-## Section 15: Troubleshooting
-
-### Schema-Specific Issues
-
-**Problem:** "relation does not exist" error
-
-```bash
-# Error:
-# ERROR: relation "tasks" does not exist
-
-# Solution: Check DB_SCHEMA matches schema with tables
-
-# 1. List all schemas
-pnpm db:list-schemas
-
-# 2. Verify which schema has tables
-DB_SCHEMA=template_infswsol_com pnpm db:studio
-
-# 3. Set correct DB_SCHEMA
-export DB_SCHEMA=template_infswsol_com
-pnpm db:push
-```
-
-### Migration Failures
-
-**Problem:** Migration fails with "permission denied"
-
-```bash
-# Cause: Schema doesn't exist
-# Solution: Create schema first
-
-psql $DATABASE_URL -c "CREATE SCHEMA app1_novatratech_com;"
-DB_SCHEMA=app1_novatratech_com pnpm db:push
-```
-
-### DNS Propagation
-
-**Problem:** Domain not resolving
-
-```bash
-# Wait 5-60 minutes for DNS propagation
-
-# Check DNS
-dig template.infswsol.com
-
-# Clear local DNS cache (macOS)
-sudo dscacheutil -flushcache
-sudo killall -HUP mDNSResponder
-```
-
-### Deployment Errors
-
-**Problem:** Vercel build fails with "MODULE_NOT_FOUND"
-
-```bash
-# Check which file imports the missing module
-# Remove import from file
-# Commit and push
-
-git add .
-git commit -m "Remove deleted import"
-git push origin main
-```
-
----
-
-## Section 16: Complete Verification Checklist
-
-### Initial Setup (One-Time)
-
-```
-Account Creation:
-☐ Created Supabase account
-☐ Created Vercel account
-☐ Installed Vercel CLI
-☐ Authenticated CLIs
-
-Supabase Project #1:
-☐ Created project "saas-reference-demos"
-☐ Created schemas (template_infswsol_com, demo_infswsol_com)
-☐ Ran migrations for both schemas
-☐ Verified tables in Drizzle Studio
-
-Supabase Project #2:
-☐ Created project "saas-production-apps"
-☐ Created schema (app1_novatratech_com)
-☐ Ran migrations
-☐ Verified tables
-
-Vercel Template Project:
-☐ Imported saas-template repository
-☐ Added domains (template.infswsol.com, demo.infswsol.com)
-☐ Configured environment variables (main and demo branches)
-☐ Enabled auto-deploy
-
-DNS Configuration:
-☐ Added CNAME records for infswsol.com subdomains
-☐ Added A records for novatratech.com apex
-☐ Added wildcard CNAME for *.novatratech.com
-☐ Verified DNS propagation
-☐ Verified SSL certificates active
-```
-
-### Deployment Verification
-
-```
-Template Deployment:
-☐ template.infswsol.com loads correctly
-☐ Authentication works
-☐ Dashboard accessible
-☐ SEO protection active
-☐ Database uses template_infswsol_com schema
-
-Demo Deployment:
-☐ demo.infswsol.com loads correctly
-☐ Authentication works independently
-☐ Database uses demo_infswsol_com schema
-☐ Can reset demo data without affecting template
-
-Production App1:
-☐ Created new repo from template
-☐ Updated CLAUDE.md
-☐ Setup local development
-☐ Created app1_novatratech_com schema
-☐ Deployed to app1.novatratech.com
-☐ Site loads correctly
-☐ Indexing allowed
-```
-
-### Safety Verification
-
-```
-Safety Scripts:
-☐ Tested require-schema.js
-☐ Tested reset-schema.js
-☐ Tested list-schemas.js
-☐ Verified schema isolation
-
-Database Isolation:
-☐ Template data separate from demo
-☐ Demo data separate from app1
-☐ Can reset demo without affecting others
-☐ Each schema has own users/auth
-
-Backup & Recovery:
-☐ Created backups of all schemas
-☐ Tested restoration process
-```
-
----
-
-## Summary
-
-**You now have:**
-
-- ✅ 2 Supabase Projects - Demos isolated from production
-- ✅ Unlimited Vercel Subdomains - Via novatratech.com apex
-- ✅ Schema Isolation - Each app completely separate
-- ✅ Safety Mechanisms - Prevent multi-schema accidents
-- ✅ Easy Scaling - Add apps with just new schemas
-- ✅ Clear Upgrade Path - Migrate profitable apps to paid tier
-- ✅ Professional Domains - Separate demo/production
-
-**Next steps:**
-
-1. Follow this guide to set up accounts and deployments
-2. Verify all checkboxes in Section 16
-3. Create your first production app using Section 9
-4. Start building features
-5. Monitor usage monthly
-6. Migrate profitable apps to paid tier when ready
-
----
-
-**🎉 Congratulations!**
-You have a production-ready deployment infrastructure that scales from free tier to paid as your apps grow.
-
-**Happy shipping! 🚀**
+**Support:**
+- GitHub Issues: https://github.com/your-org/saas-template/issues
+- Documentation: https://template.infswsol.com/docs
+- Community Discord: [Link]
+
+**Last Updated:** October 2025
+**Maintainer:** [Your Name]
+**Version:** 2.0.0
