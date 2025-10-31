@@ -70,9 +70,9 @@ export function SignupForm() {
       }
 
       if (authData.user) {
-        // Refresh the router to pick up the new session
-        router.refresh()
-        router.push('/dashboard')
+        // Force a full page reload to pick up the new session
+        // Client-side navigation doesn't work because middleware needs to read cookies
+        window.location.href = '/dashboard'
       }
     } catch {
       setError('An error occurred. Please try again.')

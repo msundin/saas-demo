@@ -3,13 +3,17 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { LoginForm } from '../LoginForm'
 
-// Mock Next.js navigation
+// Mock Next.js navigation (not used after fix, but kept for other potential uses)
 const mockPush = vi.fn()
 vi.mock('next/navigation', () => ({
   useRouter: () => ({
     push: mockPush,
   }),
 }))
+
+// Mock window.location for navigation test
+delete (window as { location?: unknown }).location
+window.location = { href: '' } as Location
 
 // Mock Supabase auth
 const mockSignInWithPassword = vi.fn()
@@ -24,6 +28,7 @@ vi.mock('@/lib/supabase/client', () => ({
 describe('LoginForm', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    window.location.href = ''
   })
 
   describe('Rendering', () => {
@@ -132,7 +137,7 @@ describe('LoginForm', () => {
       })
     })
 
-    it('should redirect to dashboard on successful login', async () => {
+    it('should redirect to dashboard on successful login using full page reload', async () => {
       const user = userEvent.setup()
       mockSignInWithPassword.mockResolvedValue({
         data: { user: { id: 'user-123' }, session: {} },
@@ -146,7 +151,10 @@ describe('LoginForm', () => {
       await user.click(screen.getByRole('button', { name: /log in/i }))
 
       await waitFor(() => {
-        expect(mockPush).toHaveBeenCalledWith('/dashboard')
+        // CRITICAL: Must use window.location.href for full page reload
+        // This ensures middleware can read session cookies before navigation
+        // Using router.push() causes infinite loading state bug
+        expect(window.location.href).toBe('/dashboard')
       })
     })
 
@@ -242,7 +250,7 @@ describe('LoginForm', () => {
       resolveLogin!()
 
       await waitFor(() => {
-        expect(mockPush).toHaveBeenCalledWith('/dashboard')
+        expect(window.location.href).toBe('/dashboard')
       })
     })
 
@@ -281,7 +289,7 @@ describe('LoginForm', () => {
       resolveLogin!()
 
       await waitFor(() => {
-        expect(mockPush).toHaveBeenCalledWith('/dashboard')
+        expect(window.location.href).toBe('/dashboard')
       })
     })
   })

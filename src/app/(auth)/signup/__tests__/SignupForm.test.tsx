@@ -3,13 +3,17 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { SignupForm } from '../SignupForm'
 
-// Mock Next.js navigation
+// Mock Next.js navigation (not used after fix, but kept for other potential uses)
 const mockPush = vi.fn()
 vi.mock('next/navigation', () => ({
   useRouter: () => ({
     push: mockPush,
   }),
 }))
+
+// Mock window.location for navigation test
+delete (window as { location?: unknown }).location
+window.location = { href: '' } as Location
 
 // Mock Supabase auth
 const mockSignUp = vi.fn()
@@ -24,6 +28,7 @@ vi.mock('@/lib/supabase/client', () => ({
 describe('SignupForm', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    window.location.href = ''
   })
 
   describe('Rendering', () => {
@@ -193,7 +198,9 @@ describe('SignupForm', () => {
       await user.click(screen.getByRole('button', { name: /sign up/i }))
 
       await waitFor(() => {
-        expect(mockPush).toHaveBeenCalledWith('/dashboard')
+        // CRITICAL: Must use window.location.href for full page reload
+        // This ensures middleware can read session cookies before navigation
+        expect(window.location.href).toBe('/dashboard')
       })
     })
 
@@ -281,7 +288,9 @@ describe('SignupForm', () => {
       resolveSignup!()
 
       await waitFor(() => {
-        expect(mockPush).toHaveBeenCalledWith('/dashboard')
+        // CRITICAL: Must use window.location.href for full page reload
+        // This ensures middleware can read session cookies before navigation
+        expect(window.location.href).toBe('/dashboard')
       })
     })
 
@@ -322,7 +331,9 @@ describe('SignupForm', () => {
       resolveSignup!()
 
       await waitFor(() => {
-        expect(mockPush).toHaveBeenCalledWith('/dashboard')
+        // CRITICAL: Must use window.location.href for full page reload
+        // This ensures middleware can read session cookies before navigation
+        expect(window.location.href).toBe('/dashboard')
       })
     })
   })
