@@ -66,7 +66,7 @@ export default function LandingPage() {
                   <CheckCircle2 className="h-6 w-6 text-primary shrink-0 mt-1" />
                   <div>
                     <h4 className="font-semibold mb-2">
-                      Se status på dina inskickde ärenden.
+                      Se status på dina inskickade ärenden.
                     </h4>
                     <p className="text-sm text-muted-foreground">
                     </p>
@@ -95,10 +95,10 @@ export default function LandingPage() {
         {/* Footer CTA */}
         <div className="text-center mt-16">
           <p className="text-muted-foreground mb-4">
-            Ready to get organized?
+            Reado?
           </p>
           <Button asChild size="lg">
-            <Link href="/signup">Create Your Account</Link>
+            <Link href="/signup">Skapa konto</Link>
           </Button>
         </div>
       </div>
