@@ -18,9 +18,9 @@ export default async function DashboardPage() {
     <div className="container mx-auto px-4 py-8 max-w-4xl">
       <header className="mb-8 flex items-center justify-between">
         <div>
-          <h1 className="text-4xl font-bold mb-2">Dashboard</h1>
+          <h1 className="text-4xl font-bold mb-2">Dina ersättningar</h1>
           <p className="text-muted-foreground">
-            Welcome back! Manage your tasks below.
+            Välkommen! Hantera din ersättningar nedan
           </p>
         </div>
         <LogoutButton />

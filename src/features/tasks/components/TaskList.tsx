@@ -11,13 +11,13 @@ export function TaskList({ tasks }: TaskListProps) {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Your Tasks</CardTitle>
+          <CardTitle>Dina ersättningar</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="text-center py-12">
             <p className="text-muted-foreground text-lg mb-2">No tasks yet</p>
             <p className="text-sm text-muted-foreground">
-              Create your first task above to get started
+              Skapa ditt första ersättningsanspråk.
             </p>
           </div>
         </CardContent>
@@ -28,7 +28,7 @@ export function TaskList({ tasks }: TaskListProps) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Your Tasks</CardTitle>
+        <CardTitle>Dina nuvarande ersättningar</CardTitle>
       </CardHeader>
       <CardContent>
         <ul className="space-y-3" role="list">

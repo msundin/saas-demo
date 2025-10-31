@@ -11,7 +11,7 @@ interface LogoutButtonProps {
 }
 
 export function LogoutButton({
-  children = 'Log out',
+  children = '',
   className,
 }: LogoutButtonProps) {
   const [isLoggingOut, setIsLoggingOut] = useState(false)
@@ -44,7 +44,7 @@ export function LogoutButton({
       disabled={isLoggingOut}
       className={className}
     >
-      {isLoggingOut ? 'Logging out...' : children}
+      {isLoggingOut ? 'Loggar ut...' : children}
     </Button>
   )
 }

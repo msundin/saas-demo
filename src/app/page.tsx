@@ -65,9 +65,10 @@ export default function LandingPage() {
                 <div className="flex items-start gap-3">
                   <CheckCircle2 className="h-6 w-6 text-primary shrink-0 mt-1" />
                   <div>
-                    <h4 className="font-semibold mb-2">Real-time Updates</h4>
-                    <p className="text-sm text-muted-foreground">
+                    <h4 className="font-semibold mb-2">
                       Se status på dina inskickde ärenden.
+                    </h4>
+                    <p className="text-sm text-muted-foreground">
                     </p>
                   </div>
                 </div>
@@ -79,9 +80,10 @@ export default function LandingPage() {
                 <div className="flex items-start gap-3">
                   <CheckCircle2 className="h-6 w-6 text-primary shrink-0 mt-1" />
                   <div>
-                    <h4 className="font-semibold mb-2">Secure & Private</h4>
-                    <p className="text-sm text-muted-foreground">
+                    <h4 className="font-semibold mb-2">
                       Säker och privat
+                    </h4>
+                    <p className="text-sm text-muted-foreground">
                     </p>
                   </div>
                 </div>

@@ -8,7 +8,7 @@ export default function LoginPage() {
         <Card>
           <CardHeader>
             <CardTitle className="text-2xl text-center">
-              Welcome Back
+              Välkommen tillbaka!
             </CardTitle>
           </CardHeader>
           <CardContent>

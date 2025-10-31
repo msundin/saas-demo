@@ -59,7 +59,7 @@ export function TaskForm({ onSuccess }: TaskFormProps) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Create New Task</CardTitle>
+        <CardTitle>Skapa nytt ersättningsanspråk</CardTitle>
       </CardHeader>
       <CardContent>
         <Form {...form}>
@@ -69,11 +69,11 @@ export function TaskForm({ onSuccess }: TaskFormProps) {
               name="title"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Title</FormLabel>
+                  <FormLabel>Titel</FormLabel>
                   <FormControl>
                     <Input
                       {...field}
-                      placeholder="Enter task title"
+                      placeholder="Skriv in titel"
                       disabled={isSubmitting}
                       aria-required="true"
                     />
@@ -88,12 +88,12 @@ export function TaskForm({ onSuccess }: TaskFormProps) {
               name="description"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Description</FormLabel>
+                  <FormLabel>Beskrivningen</FormLabel>
                   <FormControl>
                     <textarea
                       {...field}
                       value={field.value || ''}
-                      placeholder="Enter task description (optional)"
+                      placeholder="Beskriv ditt ersättningsanspråk"
                       disabled={isSubmitting}
                       className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                     />
@@ -113,7 +113,7 @@ export function TaskForm({ onSuccess }: TaskFormProps) {
             )}
 
             <Button type="submit" disabled={isSubmitting} className="w-full">
-              {isSubmitting ? 'Creating...' : 'Create Task'}
+              {isSubmitting ? 'Skapar...' : 'Skapa ersättning'}
             </Button>
           </form>
         </Form>
