@@ -70,6 +70,8 @@ export function SignupForm() {
       }
 
       if (authData.user) {
+        // Refresh the router to pick up the new session
+        router.refresh()
         router.push('/dashboard')
       }
     } catch {
