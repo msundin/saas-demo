@@ -10,7 +10,7 @@ export default function LandingPage() {
         {/* Header */}
         <header className="mb-16 text-center">
           <h1 className="text-5xl font-bold tracking-tight mb-4">
-            Task Manager
+            Ersättningsanspråk
           </h1>
           <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
             Manage your tasks efficiently with a simple, powerful task management
@@ -24,7 +24,7 @@ export default function LandingPage() {
             <CardContent className="py-12">
               <div className="text-center space-y-6">
                 <h2 className="text-3xl font-semibold">
-                  Stay Organized, Get Things Done
+                  Gör
                 </h2>
                 <p className="text-lg text-muted-foreground max-w-xl mx-auto">
                   A modern task manager built with Next.js, React, and Supabase.
