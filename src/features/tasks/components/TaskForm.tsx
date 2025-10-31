@@ -73,7 +73,7 @@ export function TaskForm({ onSuccess }: TaskFormProps) {
                   <FormControl>
                     <Input
                       {...field}
-                      placeholder="Skriv in titel"
+                      placeholder="Skriv in titel för ersättningen"
                       disabled={isSubmitting}
                       aria-required="true"
                     />
@@ -88,7 +88,7 @@ export function TaskForm({ onSuccess }: TaskFormProps) {
               name="description"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Beskrivningen</FormLabel>
+                  <FormLabel>Beskrivning</FormLabel>
                   <FormControl>
                     <textarea
                       {...field}
