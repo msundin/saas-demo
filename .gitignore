@@ -99,8 +99,9 @@ yarn-error.log*
 .pnpm-debug.log*
 
 # env files (can opt-in for committing if needed)
-# Allow .env.example to be committed
+# Allow .env.example and .env.local.template to be committed
 !.env.example
+!.env.local.template
 .env*
 
 # vercel
